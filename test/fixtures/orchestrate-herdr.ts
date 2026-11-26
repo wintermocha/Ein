@@ -55,7 +55,7 @@ switch (command) {
     if (!line || !snapshot.agents.length) throw Error("Missing turn metadata or active session");
     const { jobId, attempt, role, resultFile } = JSON.parse(line.slice("EIN_TURN ".length));
     if (dirname(resultFile) !== snapshot.agents[0]?.resultDir) throw Error("Result path is outside the granted directory");
-    log({ command, jobId, attempt, role, pane: args[2] });
+    log({ command, jobId, attempt, role, pane: args[2], prompt });
     const result = { jobId, attempt, result: { kind: "reply", text: `verified job ${jobId}` } };
     writeFileSync(resultFile + ".part", JSON.stringify(result));
     renameSync(resultFile + ".part", resultFile);

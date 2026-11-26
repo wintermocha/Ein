@@ -26,9 +26,9 @@ export function createHarness(runTurn: RunTurn, options: Options = {}) {
   let fatal = false;
   const dispatcher = new Dispatcher({
     queue: state.jobs, config, runner: options.runner ?? "omo", neutralDirectory, onFatal() { fatal = true; },
-    runTurn(request, signal, update) {
+    runTurn(request, signal, update, onThreadUnavailable) {
       calls.push(request);
-      return runTurn(request, signal, update);
+      return runTurn(request, signal, update, onThreadUnavailable);
     },
   });
   function send(text: string, { channel = "CSHARED", root, user = "UOWNER" }: SendOptions = {}) {

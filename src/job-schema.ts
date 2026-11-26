@@ -44,4 +44,8 @@ export const jobsSchema = `
   CREATE TABLE IF NOT EXISTS conversation_projects (
     conversation TEXT PRIMARY KEY, project TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS thread_cursors (
+    conversation TEXT NOT NULL, sessionId TEXT NOT NULL, throughTs TEXT NOT NULL,
+    PRIMARY KEY (conversation, sessionId)
+  );
 `;

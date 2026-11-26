@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JobQueue, type JobInput } from "../src/job-queue";
+import { JobQueue, threadCutoff, type JobInput } from "../src/job-queue";
 
 let directory: string;
 let database: Database;
@@ -74,7 +74,7 @@ test("clarification bypasses queued work from a different user and preserves the
   queue.settleDelivery(sent.id, { kind: "sent", ts: "10.000010" });
   const resumed = queue.ready()[0]!;
   expect(resumed).toMatchObject({ stage: "main", sessionId: "M", project: "web", attempt: deciding.attempt + 1,
-    context: "partial result", clarification: JSON.stringify([{ question: "which project?", answer: "web" }]) });
+    context: "partial result", clarification: JSON.stringify([{ question: "which project?", answer: "web", ts: "10.000011" }]) });
   queue.ask(resumed.id, resumed.attempt, "confirm?");
   const confirmation = queue.claimDelivery(Date.now())!;
   queue.settleDelivery(confirmation.id, { kind: "sent", ts: "11.4" });
@@ -82,8 +82,11 @@ test("clarification bypasses queued work from a different user and preserves the
   const latest = queue.ready()[0]!;
   expect(latest.attempt).toBe(resumed.attempt + 1);
   expect(JSON.parse(latest.clarification!)).toEqual([
-    { question: "which project?", answer: "web" }, { question: "confirm?", answer: "again" },
+    { question: "which project?", answer: "web", ts: "10.000011" },
+    { question: "confirm?", answer: "again", ts: "11.400001" },
   ]);
+  expect(threadCutoff(latest)).toBe("11.400001");
+  expect(threadCutoff({ ...latest, clarification: '[{"question":"old?","answer":"yes"}]' })).toBe(first.ts);
   queue.answer(latest.id, latest.attempt, "finished");
   const head = queue.ready()[0]!;
   expect(head.text).toBe("outsider");
@@ -98,6 +101,36 @@ test("a failed delivery insertion rolls back finishing and clarification", () =>
   database.exec("CREATE TRIGGER fail BEFORE INSERT ON slack_deliveries BEGIN SELECT RAISE(ABORT,'disk full'); END");
   expect(() => queue.ask(job.id, job.attempt, "why?")).toThrow("disk full");
   expect(() => queue.answer(job.id, job.attempt, "done")).toThrow("disk full");
+  expect(queue.get(job.id)).toEqual(job);
+  expect(queue.claimDelivery(Date.now())).toBeNull();
+});
+
+test("thread context cursors advance only forward per session and conversation across restarts", () => {
+  // Reopening a database created before thread context support adds the cursor table.
+  database.exec("DROP TABLE thread_cursors");
+  database.close();
+  open();
+  expect(queue.threadCursor("thread", "assigned")).toBeNull();
+  for (const ts of ["9.999999", "10.2", "10.100001", "10.200000"]) {
+    queue.withThreadCursor("thread", "assigned", ts, () => {});
+  }
+  queue.withThreadCursor("other", "assigned", "4.1", () => {});
+  queue.withThreadCursor("thread", "main", "5.1", () => {});
+  database.close();
+  open();
+  expect(queue.threadCursor("thread", "assigned")).toBe("10.2");
+  expect(queue.threadCursor("thread", "main")).toBe("5.1");
+  expect(queue.threadCursor("other", "assigned")).toBe("4.1");
+  expect(queue.threadCursor("other", "main")).toBeNull();
+});
+
+test("a failed thread cursor write rolls back the job outcome and its Slack delivery", () => {
+  queue.enqueue(input("request"));
+  const job = queue.ready()[0]!;
+  database.exec("CREATE TRIGGER fail BEFORE INSERT ON thread_cursors BEGIN SELECT RAISE(ABORT,'disk full'); END");
+  expect(() => queue.withThreadCursor(job.conversation, "worker", job.ts,
+    () => queue.answer(job.id, job.attempt, "done"))).toThrow("disk full");
+  expect(queue.threadCursor(job.conversation, "worker")).toBeNull();
   expect(queue.get(job.id)).toEqual(job);
   expect(queue.claimDelivery(Date.now())).toBeNull();
 });

@@ -4,6 +4,7 @@ import { DeliveryStore, type DeliverySettlement } from "./delivery-store";
 import { jobsSchema, type Job, type JobInput } from "./job-schema";
 import { redactCredentials } from "./redaction";
 import type { SessionRef } from "./runners";
+import { compareSlackTs } from "./thread-history";
 
 export type { DeliverySettlement, OutgoingDelivery } from "./delivery-store";
 export type { Job, JobInput } from "./job-schema";
@@ -13,16 +14,21 @@ type HistoryEntry = { user: string; text: string; answer: string };
 type Step = { stage: string; project?: string | null; sessionId?: string | null; context?: string | null };
 
 type ConfirmedQuestion = Job & { questionTs: string };
+type Clarification = { question: string; answer: string; ts?: string };
 const confirmedQuestion = `SELECT jobs.*, d.slackTs AS questionTs FROM jobs
   JOIN slack_deliveries d ON d.id = jobs.questionDelivery
   WHERE jobs.status = 'waiting' AND d.status = 'sent'`;
 
-function afterQuestion(ts: string, questionTs: string): boolean {
-  const [seconds, micros] = ts.split(".");
-  const [sentSeconds, sentMicros] = questionTs.split(".");
-  if (!seconds || !micros || !sentSeconds || !sentMicros) return false;
-  const delta = BigInt(seconds) - BigInt(sentSeconds);
-  return delta > 0n || (delta === 0n && micros.padEnd(6, "0") > sentMicros.padEnd(6, "0"));
+export function jobClarifications(job: Job): Clarification[] {
+  return job.clarification ? JSON.parse(job.clarification) as Clarification[] : [];
+}
+
+export function threadCutoff(job: Job, answers = jobClarifications(job)): string {
+  let cutoff = job.ts;
+  for (const { ts } of answers) {
+    if (ts && compareSlackTs(ts, cutoff) > 0) cutoff = ts;
+  }
+  return cutoff;
 }
 
 export class JobQueue extends DeliveryStore {
@@ -46,8 +52,8 @@ export class JobQueue extends DeliveryStore {
       const waiting = this.db.query<ConfirmedQuestion, [string, string]>(
         `${confirmedQuestion} AND jobs.conversation = ? AND jobs.user = ?`,
       ).get(conversation, user);
-      if (waiting && afterQuestion(ts, waiting.questionTs)) {
-        this.consumeClarification(waiting, Number(result.lastInsertRowid), text);
+      if (waiting && compareSlackTs(ts, waiting.questionTs) > 0) {
+        this.consumeClarification(waiting, { id: Number(result.lastInsertRowid), text, ts });
       }
     })();
   }
@@ -124,24 +130,42 @@ export class JobQueue extends DeliveryStore {
       const candidates = this.db.query<Pick<Job, "id" | "ts" | "text">, [string, string, number]>(`
         SELECT id, ts, text FROM jobs WHERE conversation = ? AND user = ? AND id > ? AND status = 'queued'
         ORDER BY id`).all(waiting.conversation, waiting.user, waiting.id);
-      const response = candidates.find(row => afterQuestion(row.ts, waiting.questionTs));
-      if (response) this.consumeClarification(waiting, response.id, response.text);
+      const response = candidates.find(row => compareSlackTs(row.ts, waiting.questionTs) > 0);
+      if (response) this.consumeClarification(waiting, response);
     })();
   }
 
-  private consumeClarification(job: ConfirmedQuestion, responseId: number, answer: string): void {
-    const history = job.clarification ? JSON.parse(job.clarification) as { question: string; answer: string }[] : [];
-    history.push({ question: job.question!, answer });
+  private consumeClarification(job: ConfirmedQuestion, response: Pick<Job, "id" | "text" | "ts">): void {
+    const history = jobClarifications(job);
+    history.push({ question: job.question!, answer: response.text, ts: response.ts });
     const stage = job.stage.replace(/^running\//u, "");
     this.db.query(`UPDATE jobs SET status = 'active', attempt = attempt + 1, stage = ?, clarification = ?,
       question = NULL, questionDelivery = NULL WHERE id = ?`).run(stage, JSON.stringify(history), job.id);
-    this.db.query("UPDATE jobs SET status = 'done' WHERE id = ?").run(responseId);
+    this.db.query("UPDATE jobs SET status = 'done' WHERE id = ?").run(response.id);
   }
 
   history(conversation: string, beforeJobId: number, ownerUser?: string): HistoryEntry[] {
     return this.db.query<HistoryEntry, [string, number, string | null, string | null]>(`SELECT user, text, answer FROM jobs
       WHERE conversation = ? AND id < ? AND answer IS NOT NULL AND (? IS NULL OR user = ?)
       ORDER BY id DESC LIMIT 8`).all(conversation, beforeJobId, ownerUser ?? null, ownerUser ?? null).reverse();
+  }
+
+  threadCursor(conversation: string, sessionId: string): string | null {
+    const row = this.db.query<{ throughTs: string }, [string, string]>(`SELECT throughTs FROM thread_cursors
+      WHERE conversation = ? AND sessionId = ?`).get(conversation, sessionId);
+    return row?.throughTs ?? null;
+  }
+
+  /** Commit the session's observed Slack window together with the outcome that acknowledges it. */
+  withThreadCursor(conversation: string, sessionId: string, ts: string, apply: () => void): void {
+    this.db.transaction(() => {
+      apply();
+      const previous = this.threadCursor(conversation, sessionId);
+      if (previous !== null && compareSlackTs(ts, previous) <= 0) return;
+      this.db.query(`INSERT INTO thread_cursors (conversation, sessionId, throughTs) VALUES (?, ?, ?)
+        ON CONFLICT(conversation, sessionId) DO UPDATE SET throughTs = excluded.throughTs`)
+        .run(conversation, sessionId, ts);
+    })();
   }
 
   projectFor(conversation: string): string | undefined {

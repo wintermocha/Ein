@@ -15,6 +15,7 @@ const positiveId = z.number().int().positive();
 const resultEnvelope = z.strictObject({ jobId: positiveId, attempt: positiveId, result: turnResultSchema });
 const claimSchema = z.strictObject({
   nonce: z.uuid(), deadline: positiveId, requestHash: z.string().regex(/^[0-9a-f]{64}$/),
+  threadThrough: z.string().regex(/^\d+\.\d{1,6}$/).optional(),
 });
 type Claim = z.infer<typeof claimSchema>;
 
@@ -71,19 +72,27 @@ export function turnFiles(root: string, request: TurnRequest) {
     }
   };
   const path = join(claims, `${key}-${request.jobId}-${request.attempt}.json`);
-  const requestHash = createHash("sha256").update(JSON.stringify([
-    request.session.id, request.jobId, request.attempt, request.role, request.input,
-    request.canAssign, request.canEscalate, initial.dev.toString(), initial.ino.toString(),
-  ])).digest("hex");
+  function hashInput(input: string): string {
+    return createHash("sha256").update(JSON.stringify([
+      request.session.id, request.jobId, request.attempt, request.role, input,
+      request.canAssign, request.canEscalate, initial.dev.toString(), initial.ino.toString(),
+    ])).digest("hex");
+  }
+  const requestHash = hashInput(request.input);
   function existing(): Claim | undefined {
     const json = readJson(path, 1024);
     if (json === undefined) return;
     const parsed = claimSchema.safeParse(json);
-    if (!parsed.success || parsed.data.requestHash !== requestHash) throw new TurnError("Invalid turn reservation.");
-    return parsed.data;
+    if (!parsed.success) throw new TurnError("Invalid turn reservation.");
+    const claim = parsed.data;
+    if (claim.requestHash !== requestHash &&
+        (claim.threadThrough !== undefined || !request.legacyInput || claim.requestHash !== hashInput(request.legacyInput()))) {
+      throw new TurnError("Invalid turn reservation.");
+    }
+    return claim;
   }
-  function reserve(timeoutMs: number) {
-    const claim: Claim = { nonce: randomUUID(), deadline: Date.now() + timeoutMs, requestHash };
+  function reserve(timeoutMs: number, threadThrough?: string) {
+    const claim: Claim = { nonce: randomUUID(), deadline: Date.now() + timeoutMs, requestHash, threadThrough };
     let fd: number;
     try {
       fd = openSync(path, "wx", 0o600);

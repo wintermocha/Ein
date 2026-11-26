@@ -7,6 +7,7 @@ import type { JobQueue } from "./job-queue";
 import { ensurePrivateDirectory } from "./private-directory";
 import { HerdrRunner } from "./runners";
 import { runSender } from "./sender";
+import { fetchThreadHistory } from "./thread-history";
 
 type ServiceOptions = {
   readonly config: Config;
@@ -38,7 +39,11 @@ export function prepareOrchestration(options: ServiceOptions): Orchestration {
   const onIssue = (reason: string) => console.error(`Ein: ${reason}`);
   const dispatcher = new Dispatcher({
     config, queue, runner, neutralDirectory, onFatal, onIssue,
-    runTurn: createRunTurn(new HerdrRunner({ stateDir, installationId }), turnDir),
+    runTurn: createRunTurn(new HerdrRunner({ stateDir, installationId }), turnDir, {
+      readThread: (window, signal) => fetchThreadHistory({
+        ...window, botToken: options.botToken, blockedUsers: config.blockedUsers, signal,
+      }),
+    }),
   });
   let sender: Promise<void> | undefined;
   function wake() {

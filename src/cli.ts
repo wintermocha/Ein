@@ -3,15 +3,22 @@ import { replay } from "./input";
 import { listen } from "./live";
 import { SocketFailure } from "./socket";
 import { StateError } from "./state";
+import { einCommand } from "./cli-invocation";
+import { runSniffer } from "./sniffer";
 
-const help = `Ein (아인) — Slack receiver and session orchestrator
-  bun run ein setup [--help]
-  bun run ein check
-  bun run ein replay < events.jsonl
-  bun run ein listen
-  bun run ein orchestrate
+const help = `Ein (아인) — Slack orchestration and project memory
+  ${einCommand} setup [--help]
+  ${einCommand} check
+  ${einCommand} replay < events.jsonl
+  ${einCommand} listen
+  ${einCommand} orchestrate
+  ${einCommand} project add --id ID --path DIRECTORY
+  ${einCommand} memory search --query TEXT
+  ${einCommand} run claude|codex|agy [-- NATIVE_ARGUMENTS]
+  ${einCommand} sniffer help
 
 EIN_CONFIG selects the JSON config (default ~/.config/ein/config.json).
+EIN_HOME selects the Sniffer installation and memory store (default ~/.ein).
 listen writes INBOUND records to stdout and diagnostics to stderr.
 orchestrate runs the configured agent sessions and sends replies to Slack.`;
 
@@ -22,6 +29,12 @@ async function main(args: string[]) {
     return;
   }
   const configPath = process.env["EIN_CONFIG"] ?? "~/.config/ein/config.json";
+  if (command === "__omo-bridge") {
+    const { runOmoBridge } = await import("./herdr-omo");
+    return runOmoBridge(args.slice(1));
+  }
+  if (command === "sniffer") return runSniffer(args.slice(1));
+  if (["memory", "project", "group", "run"].includes(command)) return runSniffer(args);
   if (command === "setup") {
     const { setup } = await import("./setup");
     return setup(configPath, args.slice(1));

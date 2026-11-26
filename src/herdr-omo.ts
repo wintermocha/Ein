@@ -78,8 +78,10 @@ async function serve(executable: string, sessionFile: string, socketPath: string
   }
 }
 
-if (import.meta.main) {
-  const [executable, file, socket] = process.argv.slice(2);
-  if (!executable || !file || !socket) throw new Error("Missing OMO bridge arguments.");
+export async function runOmoBridge(args: string[]) {
+  const [executable, file, socket] = args;
+  if (!executable || !file || !socket || args.length !== 3) throw new Error("Invalid OMO bridge arguments.");
   await serve(executable, file, socket);
 }
+
+if (import.meta.main) await runOmoBridge(process.argv.slice(2));

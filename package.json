@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "ein": "bun --use-system-ca src/cli.ts",
+    "package": "sh scripts/package.sh",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

@@ -9,11 +9,25 @@ export const turnResultSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type TurnResult = z.infer<typeof turnResultSchema>;
+export type MemoryScope =
+  | { readonly kind: "workspace" }
+  | {
+      readonly kind: "project";
+      readonly projectId: string;
+      readonly projectRoot: string;
+      readonly workingDirectory: string;
+      readonly command: {
+        readonly executable: string;
+        readonly env: { readonly EIN_CONFIG: string; readonly EIN_HOME: string; readonly EIN_SNIFFER_EXPECT_PROJECT: string };
+      };
+    };
+
 export type TurnRequest = {
   readonly jobId: number;
   readonly attempt: number;
   readonly session: SessionRef;
   readonly role: "main" | "conversation" | "project";
+  readonly memoryScope: MemoryScope | null;
   readonly input: string;
   readonly projects: readonly string[];
   readonly canAssign: boolean;

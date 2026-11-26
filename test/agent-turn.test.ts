@@ -22,7 +22,7 @@ beforeEach(() => {
   request = {
     jobId: 17, attempt: 1,
     session: { id: "2b06c9ab-1149-4efa-bef0-24525fb840da", runner: "codex", cwd: directory },
-    role: "conversation", input: "안녕하세요", projects: ["ein"], canAssign: false, canEscalate: false,
+    role: "conversation", memoryScope: { kind: "workspace" }, input: "안녕하세요", projects: ["ein"], canAssign: false, canEscalate: false,
   };
   prompts = [];
   ensured = [];

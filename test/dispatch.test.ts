@@ -1,9 +1,65 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { z } from "zod";
+import { createRunTurn } from "../src/agent-turn";
 import type { TurnResult } from "../src/turn-contract";
 import { createHarness } from "./fixtures/dispatch";
+
+test("the agent prompt follows the assigned memory scope across projects, review and neutral turns", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ein-scope-"));
+  const savedHome = process.env.EIN_HOME;
+  const savedConfig = process.env.EIN_CONFIG;
+  const env = { EIN_HOME: join(directory, "home with spaces"), EIN_CONFIG: join(directory, "slack.json") };
+  process.env.EIN_HOME = relative(process.cwd(), env.EIN_HOME);
+  process.env.EIN_CONFIG = relative(process.cwd(), env.EIN_CONFIG);
+  const frames: unknown[] = [];
+  const h = createHarness(createRunTurn({
+    async ensure(ref) { return ref; },
+    async prompt(_ref, prompt) {
+      const header = /^EIN_TURN (.+)$/mu.exec(prompt)?.[1];
+      if (!header) throw new Error("Missing turn header");
+      const frame = z.object({ jobId: z.number(), attempt: z.number(), resultFile: z.string(),
+        role: z.string(), memoryScope: z.unknown() }).parse(JSON.parse(header));
+      frames.push(frame.memoryScope);
+      const result = frame.role === "project" && frames.length === 2
+        ? { kind: "escalate", reason: "review this handoff" } : { kind: "reply", text: "done" };
+      writeFileSync(frame.resultFile, JSON.stringify({ jobId: frame.jobId, attempt: frame.attempt, result }));
+    },
+  }, directory));
+  try {
+    const scope = (projectId: string) => ({ kind: "project", projectId,
+      projectRoot: "/repo/" + projectId, workingDirectory: "/repo/" + projectId,
+      command: { executable: join(env.EIN_HOME, "bin", "sniffer"), env: { ...env, EIN_SNIFFER_EXPECT_PROJECT: projectId } } });
+    const web = scope("web");
+    const api = scope("api");
+    const root = h.send("work here", { channel: "CWEB" });
+    await h.dispatcher.idle();
+    h.settle();
+    h.send("project:api check this too", { channel: "CWEB", root });
+    await h.dispatcher.idle();
+    expect(frames).toEqual([web, api, null, api, web]);
+    h.settle();
+    h.send("continue here", { channel: "CWEB", root, user: "UOTHER" });
+    await h.dispatcher.idle();
+    expect(frames).toHaveLength(5);
+    h.settle();
+    const neutral = h.send("general question");
+    await h.dispatcher.idle();
+    h.settle();
+    h.send("continue", { root: neutral });
+    await h.dispatcher.idle();
+    expect(frames.slice(5)).toEqual([null, { kind: "workspace" }]);
+  } finally {
+    if (savedHome === undefined) delete process.env.EIN_HOME;
+    else process.env.EIN_HOME = savedHome;
+    if (savedConfig === undefined) delete process.env.EIN_CONFIG;
+    else process.env.EIN_CONFIG = savedConfig;
+    await h.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("explicit projects and dedicated channels route directly; each DM thread and the top-level DM have separate owners", async () => {
   const h = createHarness(async req => ({ kind: "reply", text: String(req.jobId) }));

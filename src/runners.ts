@@ -8,6 +8,8 @@ import type { Runner } from "./config";
 import { omoIdentity } from "./herdr-omo";
 import { findCodexSession } from "./herdr-codex-index";
 import { ensurePrivateDirectory } from "./private-directory";
+import { snifferEnvironment } from "./sniffer";
+import { standalone } from "./cli-invocation";
 
 export interface SessionRef {
   id: string;
@@ -114,6 +116,8 @@ export class HerdrRunner {
       workspaceId = await pending;
     }
     const args = ["tab", "create", "--workspace", workspaceId, "--cwd", cwd, "--label", label, "--no-focus"];
+    const memory = snifferEnvironment(this.env);
+    args.push("--env", "EIN_CONFIG=" + memory.EIN_CONFIG, "--env", "EIN_HOME=" + memory.EIN_HOME);
     // The native index and the pane must address the same Codex profile.
     if (ref.runner === "codex") args.push("--env", "CODEX_HOME=" + this.codexHome);
     const result = await this.call(args, signal, ref.id);
@@ -182,7 +186,8 @@ export class HerdrRunner {
           if (header.id !== ref.nativeId || realpathSync(header.cwd) !== realpathSync(ref.cwd)) throw new RunnerError("OMO native session identity changed.");
         } finally { closeSync(handle); }
       }
-      const command = [process.execPath, join(import.meta.dir, "herdr-omo.ts"), executable, file, this.socket(ref)];
+      const bridge = standalone ? [process.execPath, "__omo-bridge"] : [process.execPath, join(import.meta.dir, "herdr-omo.ts")];
+      const command = [...bridge, executable, file, this.socket(ref)];
       await this.call(["pane", "run", ref.paneId ?? "", "exec " + command.map(quote).join(" ")], signal, ref.id);
     }
     const deadline = Date.now() + 30_000;

@@ -12,7 +12,21 @@
 
 Slack 작업을 맡길 실행기는 설정의 `runner`에서 하나를 고릅니다. 현재 선택지는 Claude Code(`claude`), Codex CLI(`codex`), OMO(`omo`)입니다. Antigravity에서도 프로젝트를 열고 아래 명령을 실행할 수 있습니다. Slack 실행기로 Antigravity를 직접 지정하는 기능은 아직 없습니다.
 
-## 설치하고 첫 이벤트 받아 보기
+**Sniffer**는 프로젝트별 장기 기억을 저장하고 검색합니다. Slack에서 시작한 에이전트와 터미널에서 직접 실행한 에이전트가 같은 프로젝트 ID와 폴더를 기준으로 결정과 인수인계를 이어갑니다. [Sniffer 사용법](sniffer/README.md)
+
+## Mac에 설치하기
+
+Mac의 CPU에 맞는 배포 압축을 풀고 그 폴더에서 아래 명령을 실행하세요. Slack 연결기와 Sniffer, 제품별 어댑터가 함께 설치됩니다. `--with-hooks`를 사용하면 Codex·Antigravity CLI의 자동 회상 hook도 등록됩니다. 기본 설치만 원하면 옵션을 생략하세요.
+
+```sh
+sh install.sh --with-hooks
+export PATH="$HOME/.ein/bin:$PATH"
+ein --help
+```
+
+설치본에는 Bun 런타임과 빌드된 Go 엔진이 들어 있습니다. 기억 기록에는 Git을 사용합니다. Slack 연결에는 `ein setup`, 터미널에서는 프로젝트 폴더에서 `ein memory search --query "찾을 내용"`을 사용하세요. 저장소에서 배포 압축을 직접 만들 때는 Mac에 Bun과 Go 1.26 이상을 준비하고 루트에서 `bun run package`를 실행하세요. 결과는 `dist/`에 생성됩니다.
+
+## 소스에서 첫 Slack 이벤트 받아 보기
 
 Bun이 설치된 환경에서 저장소 루트로 이동해 다음 명령을 실행합니다. 예제는 로컬 파일을 사용하므로 Slack 계정이나 API 토큰 없이 실행할 수 있습니다.
 

@@ -4,7 +4,8 @@ import type { Config, Runner } from "./config";
 import type { Job, JobQueue } from "./job-queue";
 import { ensurePrivateDirectory } from "./private-directory";
 import type { SessionRef } from "./runners";
-import type { TurnRequest, TurnResult } from "./turn-contract";
+import { snifferEnvironment } from "./sniffer";
+import type { MemoryScope, TurnRequest, TurnResult } from "./turn-contract";
 
 export class DispatchHold extends Error {}
 export type Stage = "main" | "conversation" | "project" | "summary" | "review-conversation" |
@@ -118,9 +119,21 @@ export class SessionRouting {
       clarifications: job.clarification ? JSON.parse(job.clarification) : [],
     });
     const stage = target.stage;
-    return { jobId: job.id, attempt: job.attempt, role: role(stage), input, session,
-      projects: projects.map(p => p.id), canAssign: role(stage) === "main" || stage === "conversation",
+    const kind = role(stage);
+    const memoryScope = this.memoryScope(job, kind, target.project, session);
+    return { jobId: job.id, attempt: job.attempt, role: kind, input, session, memoryScope,
+      projects: projects.map(p => p.id), canAssign: kind === "main" || stage === "conversation",
       canEscalate: stage === "conversation" || stage === "project" };
+  }
+
+  private memoryScope(job: Job, kind: TurnRequest["role"], projectId: string | null, session: SessionRef): MemoryScope | null {
+    if (kind === "main" || job.user !== this.config.ownerUser) return null;
+    if (projectId === null) return { kind: "workspace" };
+    const { EIN_HOME, EIN_CONFIG } = snifferEnvironment();
+    // reserve() pinned this session to the selected registration before the turn was claimed.
+    return { kind: "project", projectId, projectRoot: session.cwd, workingDirectory: session.cwd,
+      command: { executable: join(EIN_HOME, "bin", "sniffer"),
+        env: { EIN_HOME, EIN_CONFIG, EIN_SNIFFER_EXPECT_PROJECT: projectId } } };
   }
 
   apply(job: Job, target: Target, request: TurnRequest, result: TurnResult): void {

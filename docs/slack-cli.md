@@ -20,7 +20,19 @@ bun run typecheck
 
 Bun 1.4.2의 내장 `undici`에는 Slack SDK 3.2.0이 연결 상태 확인에 쓰는 `ping()`이 없다. 위 설치 명령은 SDK가 npm판 `undici`를 불러오도록 두 모듈 경로를 바꾸는 패치를 자동으로 적용한다. SDK나 Bun을 업그레이드할 때는 `bun test test/sdk-socket-integration.test.ts`로 실제 소켓의 heartbeat와 재연결도 확인한다. [의존성 및 패치 설정](../package.json)
 
-## Slack 연결 준비
+## 처음 Slack에 연결하기
+
+1. 저장소 루트에서 `bun run ein setup`을 실행한다. 새 앱이면 CLI가 보여주는 JSON을 Slack의 **Create New App → From a manifest**에 붙여넣는다. 기존 앱이면 필요한 구독과 권한을 확인한다. 앱의 **Basic Information**에서 App ID를 복사해 입력한다.
+2. **Basic Information → App-Level Tokens**에서 `connections:write` 앱 토큰을 만든다. **OAuth & Permissions**에서 워크스페이스에 앱을 설치하고 봇 토큰을 복사한다. 터미널의 숨김 입력란에 각각 붙여넣는다. 기존 `EIN_APP_TOKEN`과 `EIN_BOT_TOKEN`도 쓸 수 있다. 환경변수를 사용하면 이후 실행에도 같은 환경이 필요하다.
+3. 터미널에 표시된 링크에서 Ein에게 일회용 코드를 1:1 DM의 새 메시지로 보낸다. CLI에 표시된 사용자 ID가 본인인지 확인하고 승인한다. Ein이 같은 DM에 **“연결됐어요”**라고 답하면 로컬 설정이 완성된다.
+
+중단한 뒤 같은 `EIN_CONFIG`로 `bun run ein setup`을 다시 실행하면 앱 선택, 개별 토큰 입력, DM 수신까지 마친 지점에서 이어간다. DM을 보내기 전에 중단했다면 새 코드를 사용한다. `bun run ein setup --status`로 다음 단계를 확인하고, 잘못 입력한 토큰은 `bun run ein setup --tokens`로 교체한다. 기존 설정 파일이 있으면 setup이 그 위치를 새 설치에 사용하지 않는다.
+
+확인 답장을 보내는 도중 연결이 끊기면 같은 명령으로 재개한다. Ein이 해당 DM에서 이전 답장의 전송 기록을 확인하고 설정 저장을 마친다.
+
+Codex에서 이 저장소를 열고 `$ein-setup`으로 연결을 요청하면 같은 과정을 대화로 진행한다. 토큰 입력만 사용자의 로컬 터미널에서 진행한다. 완료된 설정은 DM 수신용이다. `bun run ein listen`으로 실행하고, 채널 멘션은 `watchChannels`에서 추가한다. [온보딩 스킬](../.agents/skills/ein-setup/SKILL.md)
+
+## 수동 설정과 기존 설치 업그레이드
 
 기존 설치에서 업그레이드할 때는 수신기를 종료한 뒤 `EIN_CONFIG`로 기존 설정 파일을 지정한다. 설정에서 `stateFile`을 생략했다면 기존 SQLite 파일의 절대 경로를 명시한다. 같은 스레드에서 작업을 이어가려면 DB와 옆의 `.orchestration/` 디렉터리, 등록한 프로젝트 ID와 작업 경로를 유지한다. 셸이나 서비스에 토큰을 등록했다면 환경변수 이름을 `EIN_APP_TOKEN`, `EIN_BOT_TOKEN`으로 바꾼다.
 

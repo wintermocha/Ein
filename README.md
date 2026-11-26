@@ -26,4 +26,14 @@ EIN_CONFIG=examples/config.json bun run ein replay < examples/events.jsonl
 
 ## 내 Slack에 연결하기
 
-예제 설정의 팀·봇·소유자 ID와 프로젝트 경로를 실제 값으로 바꾸고 Slack 앱 토큰과 봇 토큰을 준비합니다. 메시지를 터미널에서 받으려면 `bun run ein listen`을 실행합니다. 에이전트가 답하게 하려면 선택한 실행기와 `herdr`를 준비한 뒤 `bun run ein orchestrate`를 실행합니다. 앱 생성부터 첫 답글까지의 순서는 운영 가이드에 있습니다. [Slack CLI 운영 가이드](docs/slack-cli.md) · [설정 예제](examples/config.json) · [Slack 앱 매니페스트](examples/slack-manifest.json)
+의존성을 설치한 뒤 저장소 루트에서 실행합니다.
+
+```sh
+bun run ein setup
+```
+
+안내에 따라 Slack 앱을 만들거나 기존 앱을 선택하고, 두 토큰을 입력한 뒤 Ein에게 확인 코드를 DM으로 보냅니다. 터미널에서 소유자 계정을 확인하면 Ein이 같은 DM에 **“연결됐어요”**라고 답합니다. 중간에 멈췄다면 같은 명령으로 이어갑니다.
+
+Codex에서 이 저장소를 열고 **“`$ein-setup`으로 Slack 연결해 줘”**라고 요청해도 됩니다. 에이전트가 한 단계씩 안내하고, 토큰은 내 터미널에서 비공개로 입력합니다. [온보딩 스킬](.agents/skills/ein-setup/SKILL.md)
+
+연결 후 `bun run ein listen`으로 DM을 받을 수 있습니다. 채널 멘션이나 에이전트 답변을 사용하려면 운영 가이드에서 추가 설정을 진행합니다. [Slack CLI 운영 가이드](docs/slack-cli.md) · [설정 예제](examples/config.json)

@@ -4,7 +4,7 @@ export type SocketOptions = {
   readonly appToken: string;
   readonly appId: string;
   readonly signal: AbortSignal;
-  readonly onEvent: (event: unknown, team: string) => void;
+  readonly onEvent: (event: unknown, team: string, authorizations: unknown) => void;
   readonly onRateLimited: (minute: number, team: string) => void;
   readonly onReady: () => void;
   readonly onDisconnected?: () => void;
@@ -20,6 +20,7 @@ const helloInfo = z.object({ app_id: z.string().min(1) });
 const payloadType = z.object({ type: z.string(), api_app_id: z.string().nullish() });
 const callback = z.object({
   team_id: z.string().nullish(),
+  authorizations: z.unknown().optional(),
   event: z.looseObject({ type: z.string() }),
 });
 const rateLimit = z.object({
@@ -35,7 +36,7 @@ function dispatch(payload: unknown, options: SocketOptions): boolean {
     case "event_callback": {
       const item = callback.safeParse(payload);
       if (!item.success) return false;
-      if (item.data.team_id) options.onEvent(item.data.event, item.data.team_id);
+      if (item.data.team_id) options.onEvent(item.data.event, item.data.team_id, item.data.authorizations);
       return true;
     }
     case "app_rate_limited": {

@@ -2,6 +2,7 @@ import { accessSync, constants, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
+import { einCommand } from "./cli-invocation";
 
 export class SetupError extends Error {
   override readonly name = "SetupError";
@@ -49,7 +50,10 @@ function pathFrom(base: string, path: string): string {
 function readConfig(path: string): unknown {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      throw new SetupError(`설정 파일이 없습니다. ${einCommand} setup으로 Slack을 연결하세요.`);
+    }
     throw new SetupError("Could not read config as a JSON file.");
   }
 }

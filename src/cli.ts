@@ -5,6 +5,7 @@ import { SocketFailure } from "./socket";
 import { StateError } from "./state";
 
 const help = `Ein (아인) — Slack receiver and session orchestrator
+  bun run ein setup [--help]
   bun run ein check
   bun run ein replay < events.jsonl
   bun run ein listen
@@ -20,10 +21,15 @@ async function main(args: string[]) {
     console.log(help);
     return;
   }
+  const configPath = process.env["EIN_CONFIG"] ?? "~/.config/ein/config.json";
+  if (command === "setup") {
+    const { setup } = await import("./setup");
+    return setup(configPath, args.slice(1));
+  }
   if (args.length !== 1 || !["check", "listen", "replay", "orchestrate"].includes(command)) {
     throw new SetupError("Invalid command or arguments. Run with --help.");
   }
-  const config = loadConfig(process.env["EIN_CONFIG"] ?? "~/.config/ein/config.json");
+  const config = loadConfig(configPath);
   switch (command) {
     case "check":
       console.log("Ein config OK (offline).");

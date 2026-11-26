@@ -10,6 +10,7 @@ type PeerOptions = {
   readonly appId?: string;
   readonly afterHello?: unknown;
   readonly onAck?: (id: string, connection: number) => void;
+  readonly onPost?: (request: Request) => Promise<Response>;
   readonly onHistory?: (method: HistoryMethod, params: URLSearchParams) =>
     Record<string, unknown> | Promise<Record<string, unknown>>;
 };
@@ -36,6 +37,9 @@ function servePeer(options: PeerOptions, caFile: string, key: string, cleanup: (
           return Response.json({ ok: true, url: `wss://127.0.0.1:${server.port}/ws` });
         case "auth.test":
           return Response.json({ ok: true, team_id: "TTEST", user_id: "UBOT" });
+        case "chat.postMessage":
+          if (options.onPost) return options.onPost(req);
+          return Response.json({ ok: false, error: "missing_scope" });
         case "conversations.history":
         case "conversations.replies":
           return Response.json(await options.onHistory?.(method, url.searchParams) ?? { ok: true, messages: [] });

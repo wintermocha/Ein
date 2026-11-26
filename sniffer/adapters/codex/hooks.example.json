@@ -1,0 +1,88 @@
+{
+  "description": "Sniffer: merge these entries into the user's Codex hooks.json; replace /ABSOLUTE/PATH/sniffer",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 4,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 4,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 4,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 4,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/ABSOLUTE/PATH/sniffer\" hook codex",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}

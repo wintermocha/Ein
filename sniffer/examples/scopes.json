@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "scopes": [
+    {"id": "global", "kind": "global"},
+    {"id": "group:work", "kind": "group", "parent": "global"},
+    {"id": "group:payments", "kind": "group", "parent": "group:work"},
+    {"id": "project:folder-1", "kind": "project", "parent": "group:payments"},
+    {"id": "project:folder-2", "kind": "project", "parent": "group:payments"},
+    {"id": "project:folder-3", "kind": "project", "parent": "group:work"}
+  ]
+}

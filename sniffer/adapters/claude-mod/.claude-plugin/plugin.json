@@ -1,0 +1,5 @@
+{
+  "name": "sniffer-memory",
+  "version": "0.4.0",
+  "description": "Ein Sniffer: a native per-session Claude memory agent with a local Go storage bridge"
+}

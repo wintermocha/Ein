@@ -1,0 +1,14 @@
+{
+  "new": {
+    "schema_version": 1,
+    "id": "m-port-configuration",
+    "scope_id": "group:payments",
+    "description": "가상 결제 개발 서버의 포트는 PORT 환경 변수로 전달한다",
+    "key": "payments.server.port.configuration",
+    "aliases": ["PORT", "환경 변수", "environment variable", "port configuration"],
+    "tags": ["fictional", "configuration"],
+    "updated_at": "2026-11-25T00:00:00Z",
+    "body": "# 가상 결제 개발 서버 설정\n\n이 기억은 기능 확인용 가상 데이터다.\n\n개발 서버 포트는 PORT 환경 변수로 전달한다. 코드에 포트를 고정하지 않는다.\n각 프로젝트의 로컬 기본 포트는 해당 프로젝트 전용 기억을 따른다.\n\n가상의 근거: SAMPLE-PORT-01에서 공통 규칙만 분리했다."
+  },
+  "remaining_body": "# 가상 folder-1 로컬 포트\n\n이 기억은 기능 확인용 가상 데이터다.\n\nfolder-1의 로컬 기본 포트는 4317이다.\n이 숫자를 다른 프로젝트의 기본값으로 추정하지 않는다.\n\n가상의 근거: SAMPLE-PORT-01."
+}

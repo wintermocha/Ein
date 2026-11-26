@@ -1,0 +1,8 @@
+{
+  "sniffer-memory": {
+    "enabled": true,
+    "PreInvocation": [{"type": "command", "command": "\"/ABSOLUTE/PATH/sniffer\" hook agy --event PreInvocation"}],
+    "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "\"/ABSOLUTE/PATH/sniffer\" hook agy --event PostToolUse"}]}],
+    "Stop": [{"type": "command", "command": "\"/ABSOLUTE/PATH/sniffer\" hook agy --event Stop"}]
+  }
+}

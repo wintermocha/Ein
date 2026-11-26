@@ -1,0 +1,17 @@
+{
+  "team": "TWORKSPACE",
+  "appId": "AEIN",
+  "botUser": "UEIN",
+  "ownerUser": "UOWNER",
+  "ownerDm": "DOWNER",
+  "watchChannels": ["CTEAM"],
+  "blockedUsers": [],
+  "otherUserReplyRate": { "CTEAM": 0.4 },
+  "appTokenFile": "~/.config/ein/app-token",
+  "botTokenFile": "~/.config/ein/bot-token",
+  "stateFile": "~/.local/state/ein/inbound.sqlite",
+  "runner": "omo",
+  "projects": {
+    "ein": { "path": "..", "channels": ["CTEAM"] }
+  }
+}

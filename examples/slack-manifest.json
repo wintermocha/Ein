@@ -1,0 +1,16 @@
+{
+  "display_information": { "name": "Ein", "description": "리드 세션을 위한 Slack 수신기" },
+  "features": {
+    "bot_user": { "display_name": "Ein", "always_online": false },
+    "app_home": { "messages_tab_enabled": true, "messages_tab_read_only_enabled": false }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["app_mentions:read", "im:history", "channels:history", "groups:history", "reactions:read", "chat:write"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": { "bot_events": ["app_mention", "message.im", "message.channels", "message.groups", "reaction_added"] },
+    "socket_mode_enabled": true
+  }
+}

@@ -1,0 +1,5 @@
+{"type":"event_callback","team_id":"TWORKSPACE","event":{"type":"app_mention","user":"UOWNER","channel":"CTEAM","ts":"1795000000.000001","text":"<@UEIN> 지난 회의 정리해 줘"}}
+{"type":"event_callback","team_id":"TWORKSPACE","event":{"type":"message","user":"UOWNER","channel":"CTEAM","ts":"1795000000.000001","text":"<@UEIN> 지난 회의 정리해 줘"}}
+{"type":"event_callback","team_id":"TWORKSPACE","event":{"type":"message","user":"UEIN","bot_id":"BEIN","channel":"CTEAM","thread_ts":"1795000000.000001","ts":"1795000000.000002","text":"정리했습니다."}}
+{"type":"event_callback","team_id":"TWORKSPACE","event":{"type":"message","user":"UOWNER","channel":"CTEAM","thread_ts":"1795000000.000001","ts":"1795000000.000003","text":"결정 사항도 알려 줘"}}
+{"type":"event_callback","team_id":"TWORKSPACE","event":{"type":"reaction_added","user":"UOWNER","item_user":"UEIN","reaction":"thumbsup","event_ts":"1795000000.000004","item":{"type":"message","channel":"CTEAM","ts":"1795000000.000002"}}}

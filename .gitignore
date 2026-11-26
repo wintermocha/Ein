@@ -1,0 +1,10 @@
+node_modules/
+/.omo/
+.env
+.env.*
+config.local.json
+*.sqlite*
+*.db
+*.db-*
+*.orchestration/
+.DS_Store

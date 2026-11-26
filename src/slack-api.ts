@@ -21,7 +21,7 @@ const pageSchema = z.discriminatedUnion("ok", [
 ]);
 export type HistoryMessage = z.infer<typeof message>;
 export type RecoveryWindow = { readonly oldest: string; readonly latest: string };
-type Target = { readonly channel: string; readonly threadTs?: string };
+type Target = { readonly channel: string; readonly threadTs?: string; readonly requireThread?: boolean };
 type WebOptions = {
   readonly botToken: string;
   readonly signal: AbortSignal;
@@ -99,8 +99,11 @@ export async function* readMessages(options: WebOptions, target: Target) {
   const cursors = new Set<string>();
   while (!options.signal.aborted) {
     const page = await readPage(options, method, params);
-    // A deleted root has no retrievable replies for this scan.
-    if (page === undefined) return;
+    // Recovery can skip a deleted root. A turn requesting that thread needs to know it was unavailable.
+    if (page === undefined) {
+      if (target.requireThread) throw new RecoveryIssue(method, "thread_not_found");
+      return;
+    }
     yield* page.messages;
     if (page.is_limited) throw new RecoveryIssue(method, "history_limited");
     const next = page.response_metadata?.next_cursor;

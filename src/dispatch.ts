@@ -144,6 +144,7 @@ export class Dispatcher {
     const signal = this.lifetime.signal;
     if (signal.aborted) return;
     const request = this.routing.request(job, target, session);
+    let threadDelivered = true;
     let raw: unknown;
     try {
       raw = await runTurn(request, signal, ref => {
@@ -157,7 +158,7 @@ export class Dispatcher {
           this.fail(error);
           throw error;
         }
-      });
+      }, () => { threadDelivered = false; });
     } catch (error) {
       if (!signal.aborted) this.hold(job, holdReason(error, session.runner));
       return;
@@ -171,7 +172,12 @@ export class Dispatcher {
       return;
     }
     try {
-      this.routing.apply(job, target, request, result.data);
+      const apply = () => this.routing.apply(job, target, request, result.data);
+      if (request.threadWindow && threadDelivered) {
+        queue.withThreadCursor(job.conversation, session.id, request.threadWindow.before, apply);
+      } else {
+        apply();
+      }
       this.changed();
     } catch (error) {
       if (!(error instanceof DispatchHold)) throw error;

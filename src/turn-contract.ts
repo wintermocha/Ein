@@ -9,6 +9,12 @@ export const turnResultSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type TurnResult = z.infer<typeof turnResultSchema>;
+export type ThreadWindow = {
+  readonly channel: string;
+  readonly threadTs: string;
+  readonly after: string | null;
+  readonly before: string;
+};
 export type MemoryScope =
   | { readonly kind: "workspace" }
   | {
@@ -29,6 +35,8 @@ export type TurnRequest = {
   readonly role: "main" | "conversation" | "project";
   readonly memoryScope: MemoryScope | null;
   readonly input: string;
+  readonly legacyInput?: () => string;
+  readonly threadWindow?: ThreadWindow;
   readonly projects: readonly string[];
   readonly canAssign: boolean;
   readonly canEscalate: boolean;
@@ -38,4 +46,5 @@ export type RunTurn = (
   request: TurnRequest,
   signal: AbortSignal,
   onUpdate: (ref: SessionRef) => void,
+  onThreadUnavailable?: () => void,
 ) => Promise<TurnResult>;

@@ -70,7 +70,9 @@ test("after a repo-free main reply subsequent messages reuse a neutral conversat
     expect(h.calls[1]?.session.id).toBe(h.calls[2]?.session.id);
     expect(h.calls[1]?.session.id).not.toBe(h.calls[0]?.session.id);
     expect(h.calls.every(turn => turn.session.cwd.startsWith(`${h.neutralDirectory}/`))).toBe(true);
-    expect(h.calls[1]?.input).toContain("이 용어의 뜻이 뭐야?");
+    expect(h.calls[1]?.threadWindow).toMatchObject({ after: null, threadTs: root });
+    expect(h.calls[2]?.threadWindow?.after).toBe(h.calls[1]?.threadWindow?.before);
+    expect(h.calls[2]?.input).not.toContain("예시도 알려줘");
     expect(h.settle()).toMatchObject([{ threadTs: root }, { threadTs: root }]);
   } finally {
     await h.close();
@@ -124,7 +126,7 @@ test.each(["before", "after"])("an owner's reply arriving %s the Slack POST rece
     h.send("OUTSIDER-APPROVAL", { root, user: "UOTHER" });
     await h.dispatcher.idle();
     expect(h.calls.filter(turn => turn.role === "main")).toHaveLength(1);
-    h.send("OWNER-CONFIRMS-WEB", { root });
+    const confirmedAt = h.send("OWNER-CONFIRMS-WEB", { root });
     if (timing === "before") {
       await h.dispatcher.idle();
       expect(h.calls.filter(turn => turn.role === "main")).toHaveLength(1);
@@ -135,6 +137,7 @@ test.each(["before", "after"])("an owner's reply arriving %s the Slack POST rece
     expect(decisions).toHaveLength(2);
     expect(decisions[1]?.jobId).toBe(decisions[0]?.jobId);
     expect(decisions[1]?.attempt).toBeGreaterThan(decisions[0]?.attempt ?? 0);
+    expect(decisions[1]?.threadWindow).toMatchObject({ after: root, before: confirmedAt });
     expect(decisions[1]?.input).toContain("웹 프로젝트인가요?");
     expect(decisions[1]?.input).toContain("OWNER-CONFIRMS-WEB");
     expect(decisions[1]?.input).not.toContain("OUTSIDER-APPROVAL");

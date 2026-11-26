@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { Config, Runner } from "./config";
-import type { Job, JobQueue } from "./job-queue";
+import { jobClarifications, threadCutoff, type Job, type JobQueue } from "./job-queue";
 import { ensurePrivateDirectory } from "./private-directory";
 import type { SessionRef } from "./runners";
 import { snifferEnvironment } from "./sniffer";
+import { compareSlackTs } from "./thread-history";
 import type { MemoryScope, TurnRequest, TurnResult } from "./turn-contract";
 
 export class DispatchHold extends Error {}
@@ -112,16 +113,27 @@ export class SessionRouting {
 
   request(job: Job, target: Target, session: SessionRef): TurnRequest {
     const projects = Object.entries(this.config.projects).map(([id, project]) => ({ id, channels: project.channels }));
-    const input = JSON.stringify({
+    const fields = {
       text: job.text, sender: job.user, channel: job.channel, thread: job.threadTs,
       context: job.context, project: job.project, registeredProjects: projects,
-      history: this.queue.history(job.conversation, job.id, this.config.ownerUser),
-      clarifications: job.clarification ? JSON.parse(job.clarification) : [],
+    };
+    const answers = jobClarifications(job);
+    const legacyInput = () => JSON.stringify({
+      ...fields, history: this.queue.history(job.conversation, job.id, this.config.ownerUser),
+      clarifications: answers.map(({ question, answer }) => ({ question, answer })),
     });
+    const threadWindow = job.threadTs === null ? undefined : {
+      channel: job.channel, threadTs: job.threadTs,
+      after: this.queue.threadCursor(job.conversation, session.id), before: threadCutoff(job, answers),
+    };
+    const after = threadWindow?.after;
+    const clarifications = after ? answers.filter(entry => entry.ts && compareSlackTs(entry.ts, after) > 0) : answers;
+    const input = threadWindow ? JSON.stringify({ ...fields, clarifications }) : legacyInput();
     const stage = target.stage;
     const kind = role(stage);
     const memoryScope = this.memoryScope(job, kind, target.project, session);
     return { jobId: job.id, attempt: job.attempt, role: kind, input, session, memoryScope,
+      ...(threadWindow ? { threadWindow, legacyInput } : {}),
       projects: projects.map(p => p.id), canAssign: kind === "main" || stage === "conversation",
       canEscalate: stage === "conversation" || stage === "project" };
   }

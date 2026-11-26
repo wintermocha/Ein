@@ -27,7 +27,7 @@ test("the agent prompt follows the assigned memory scope across projects, review
         ? { kind: "escalate", reason: "review this handoff" } : { kind: "reply", text: "done" };
       writeFileSync(frame.resultFile, JSON.stringify({ jobId: frame.jobId, attempt: frame.attempt, result }));
     },
-  }, directory));
+  }, directory, { readThread: async () => [] }));
   try {
     const scope = (projectId: string) => ({ kind: "project", projectId,
       projectRoot: "/repo/" + projectId, workingDirectory: "/repo/" + projectId,
@@ -80,6 +80,28 @@ test("explicit projects and dedicated channels route directly; each DM thread an
     h.send("continue", { channel: "DCHAT" });
     await h.dispatcher.idle();
     expect(h.calls[3]?.session.id).toBe(h.calls.find(req => req.session.cwd === "/repo/web")?.session.id);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a Slack history outage leaves the next turn eligible to recover the missing interval", async () => {
+  const h = createHarness(async (request, _signal, _update, unavailable) => {
+    if (request.jobId === 2) unavailable?.();
+    return { kind: "reply", text: "done" };
+  });
+  try {
+    const root = h.send("project:web first");
+    await h.dispatcher.idle();
+    h.settle();
+    h.send("history unavailable", { root });
+    await h.dispatcher.idle();
+    const recoveredAt = h.send("history available again", { root });
+    await h.dispatcher.idle();
+    h.send("last request", { root });
+    await h.dispatcher.idle();
+    expect(h.calls.map(request => request.threadWindow?.after)).toEqual([null, root, root, recoveredAt]);
+    expect(new Set(h.calls.map(request => request.session.id)).size).toBe(1);
   } finally {
     await h.close();
   }

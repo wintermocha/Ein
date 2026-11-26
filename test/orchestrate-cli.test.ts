@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("orchestrate recovers an ACKed job and an accepted POST, then reuses the thread session after a config change", async () => {
+test("orchestrate recovers an ACKed mention and an accepted POST, then sends only new thread context to the same session", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ein-orchestrate-cli-"));
   const bin = join(dir, "bin");
   const project = join(dir, "project");
@@ -43,8 +43,12 @@ test("orchestrate recovers an ACKed job and an accepted POST, then reuses the th
     expect(await run("recover", "codex")).toEqual({ code: 43, out: "", err: "" });
     expect(rows("posts.jsonl")).toHaveLength(1);
     expect(await run("followup", "claude")).toEqual({ code: 0, out: "", err: "" });
-    expect(rows("acks.jsonl")).toEqual([["crash", "root"], ["followup", "root"], ["followup", "overlap"], ["followup", "reply"]]);
+    expect(rows("acks.jsonl")).toEqual([["crash", "mention"], ["followup", "mention"], ["followup", "overlap"], ["followup", "reply"]]);
     expect(rows("reconciled.jsonl")).toEqual([["CPROJECT", "1000000000.000001"]]);
+    expect(rows("thread-reads.jsonl")).toEqual([
+      ["recover", "CPROJECT", "1000000000.000001", "1000000000.000001", "1000000001.000001"],
+      ["followup", "CPROJECT", "1000000000.000001", "1000000001.000001", "1000000002.000001"],
+    ]);
 
     const calls = rows("herdr.jsonl");
     expect(calls.filter(call => call.command === "tab create").map(call => call.cwd)).toEqual([project]);
@@ -54,6 +58,22 @@ test("orchestrate recovers an ACKed job and an accepted POST, then reuses the th
     expect(new Set(turns.map(turn => turn.jobId)).size).toBe(2);
     expect(new Set(turns.map(turn => turn.pane)).size).toBe(1);
     expect(turns.some(turn => turn.role === "main")).toBe(false);
+    const prompts: string[] = turns.map(turn => turn.prompt);
+    const messages = prompts.map(prompt => {
+      const frame = prompt.split("\n").find(line => line.startsWith("EIN_THREAD "))!;
+      return JSON.parse(frame.slice("EIN_THREAD ".length));
+    });
+    expect(messages).toEqual([
+      { kind: "initial", messages: [
+        { ts: "1000000000.000001", user: "UDESIGN", text: "The rollout starts on Tuesday." },
+        { ts: "1000000000.000002", user: "UOPS", text: "Start with the blue cluster." },
+      ] },
+      { kind: "delta", messages: [{ ts: "1000000001.000002", user: "UOPS", text: "Green is ready now." }] },
+    ]);
+    expect(prompts[0]!.match(/summarize the rollout/g)).toHaveLength(1);
+    expect(prompts[0]).not.toMatch(/Green is ready|What changed|A later decision/);
+    expect(prompts[1]!.match(/What changed since then/g)).toHaveLength(1);
+    expect(prompts[1]).not.toMatch(/The rollout starts|the blue cluster|summarize the rollout|A later decision/);
     expect(rows("posts.jsonl").map(post => [post.channel, post.thread_ts, post.text])).toEqual(
       turns.map(turn => ["CPROJECT", "1000000000.000001", `verified job ${turn.jobId}`]),
     );

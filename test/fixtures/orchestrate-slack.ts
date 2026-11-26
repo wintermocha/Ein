@@ -7,6 +7,12 @@ const phase = process.env["FIXTURE_PHASE"]!;
 const url = "wss://orchestrate.invalid/";
 const channel = "CPROJECT";
 const rootTs = "1000000000.000001";
+const root = { ts: rootTs, user: "UDESIGN", text: "The rollout starts on Tuesday." };
+const prior = { thread_ts: rootTs, ts: "1000000000.000002", user: "UOPS", text: "Start with the blue cluster." };
+const mention = { thread_ts: rootTs, ts: "1000000001.000001", user: "UOWNER", text: "<@UBOT> project:ein summarize the rollout" };
+const update = { thread_ts: rootTs, ts: "1000000001.000002", user: "UOPS", text: "Green is ready now." };
+const followup = { thread_ts: rootTs, ts: "1000000002.000001", user: "UOWNER", text: "What changed since then?" };
+const later = { thread_ts: rootTs, ts: "1000000002.000002", user: "UDESIGN", text: "A later decision." };
 
 function log(name: string, value: unknown) {
   appendFileSync(join(sandbox, name), JSON.stringify(value) + "\n");
@@ -21,7 +27,14 @@ async function localSlack(input: RequestInfo | URL, init?: RequestInit): Promise
     case "/api/apps.connections.open": return Response.json({ ok: true, url });
     case "/api/conversations.history": return Response.json({ ok: true, messages: [] });
     case "/api/conversations.replies": {
-      if (searchParams.get("include_all_metadata") !== "true") return Response.json({ ok: true, messages: [] });
+      if (searchParams.get("include_all_metadata") !== "true") {
+        const oldest = searchParams.get("oldest")!;
+        // Reconnect recovery scans the current wall-clock interval. The test thread predates it.
+        if (oldest > later.ts) return Response.json({ ok: true, messages: [] });
+        log("thread-reads.jsonl", [phase, searchParams.get("channel"), searchParams.get("ts"), oldest, searchParams.get("latest")]);
+        // Return the parent and overlapping rows so the real consumer must enforce both bounds.
+        return Response.json({ ok: true, messages: [root, prior, mention, update, followup, later] });
+      }
       log("reconciled.jsonl", [searchParams.get("channel"), searchParams.get("ts")]);
       const posted = JSON.parse(readFileSync(join(sandbox, "posts.jsonl"), "utf8").trimEnd().split("\n")[0]!);
       const inWindow = Number(posted.ts) >= Number(searchParams.get("oldest"));
@@ -53,11 +66,10 @@ installLocalSlack({
       type: "events_api", envelope_id: id,
       payload: { type: "event_callback", api_app_id: "AEIN", team_id: "TTEST", event: message },
     });
-    const root = { type: "app_mention", channel, ts: rootTs, user: "UOWNER", text: "<@UBOT> project:ein summarize the project" };
-    event("root", root);
+    event("mention", { type: "app_mention", channel, ...mention });
     if (phase === "followup") {
-      event("overlap", { ...root, type: "message" });
-      event("reply", { ...root, ts: "1000000002.000001", thread_ts: rootTs, text: "<@UBOT> what changed since then?" });
+      event("overlap", { type: "message", channel, ...mention });
+      event("reply", { type: "message", channel, ...followup });
     }
   },
   acknowledged(id) {

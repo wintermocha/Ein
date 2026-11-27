@@ -14,6 +14,10 @@ Slack 작업을 맡길 실행기는 설정의 `runner`에서 Claude Code(`claude
 
 **Sniffer**는 프로젝트별 장기 기억을 저장하고 검색합니다. Slack에서 내린 결정을 같은 프로젝트의 터미널 세션에서 찾아볼 수 있습니다. Slack 없이 시작하려면 작업 폴더를 등록하고 첫 기억을 저장해 보세요. [Sniffer에서 첫 기억 저장·검색하기](sniffer/README.md#slack-없이-프로젝트-기억-사용하기)
 
+## 에이전트 실행 흐름
+
+![소유자의 Slack 요청은 대화 담당 세션으로 전달됩니다. 프로젝트가 모호하면 메인 세션이 배정을 돕고, 담당 세션은 필요에 따라 Sniffer 기억을 조회하거나 다른 프로젝트 세션에 작업을 맡깁니다. 결과는 원래 DM이나 스레드로 돌아옵니다.](docs/assets/agent-flow.png)
+
 ## Mac에 설치하기
 
 Mac에서 `uname -m`이 `arm64`이면 `ein-darwin-arm64.tar.gz`, `x86_64`이면 `ein-darwin-amd64.tar.gz`를 풉니다. 압축을 푼 폴더에서 아래 명령을 실행하면 Slack 연결기와 Sniffer, 제품별 어댑터가 설치됩니다. `--with-hooks`는 Codex·Antigravity CLI의 자동 회상 hook을 등록하는 옵션입니다. 기본 설치만 원하면 옵션을 생략하세요.

@@ -15,13 +15,20 @@ test("the agent prompt follows the assigned memory scope across projects, review
   process.env.EIN_HOME = relative(process.cwd(), env.EIN_HOME);
   process.env.EIN_CONFIG = relative(process.cwd(), env.EIN_CONFIG);
   const frames: unknown[] = [];
+  const neutralCommands: unknown[] = [];
+  const paneScopes: (string | undefined)[] = [];
   const h = createHarness(createRunTurn({
-    async ensure(ref) { return ref; },
+    async ensure(ref, _signal, _update, env) {
+      paneScopes.push(env?.EIN_SNIFFER_EXPECT_PROJECT);
+      return ref;
+    },
     async prompt(_ref, prompt) {
       const header = /^EIN_TURN (.+)$/mu.exec(prompt)?.[1];
       if (!header) throw new Error("Missing turn header");
       const frame = z.object({ jobId: z.number(), attempt: z.number(), resultFile: z.string(),
-        role: z.string(), memoryScope: z.unknown() }).parse(JSON.parse(header));
+        role: z.string(), memoryScope: z.looseObject({ kind: z.string() }).nullable(),
+        snifferArgv: z.array(z.string()).nullable() }).parse(JSON.parse(header));
+      if (frame.memoryScope?.kind !== "project") neutralCommands.push(frame.snifferArgv);
       frames.push(frame.memoryScope);
       const result = frame.role === "project" && frames.length === 2
         ? { kind: "escalate", reason: "review this handoff" } : { kind: "reply", text: "done" };
@@ -31,7 +38,7 @@ test("the agent prompt follows the assigned memory scope across projects, review
   try {
     const scope = (projectId: string) => ({ kind: "project", projectId,
       projectRoot: "/repo/" + projectId, workingDirectory: "/repo/" + projectId,
-      command: { executable: join(env.EIN_HOME, "bin", "sniffer"), env: { ...env, EIN_SNIFFER_EXPECT_PROJECT: projectId } } });
+      command: { executable: join(env.EIN_HOME, "bin", "sniffer"), env: { ...env, EIN_SNIFFER_EXPECT_PROJECT: projectId, EIN_SNIFFER_DELEGATION: "assigned" } } });
     const web = scope("web");
     const api = scope("api");
     const root = h.send("work here", { channel: "CWEB" });
@@ -51,6 +58,8 @@ test("the agent prompt follows the assigned memory scope across projects, review
     h.send("continue", { root: neutral });
     await h.dispatcher.idle();
     expect(frames.slice(5)).toEqual([null, { kind: "workspace" }]);
+    expect(neutralCommands).toEqual([null, null, null]);
+    expect(paneScopes).toEqual(["web", "api", undefined, "api", "web", undefined, undefined]);
   } finally {
     if (savedHome === undefined) delete process.env.EIN_HOME;
     else process.env.EIN_HOME = savedHome;

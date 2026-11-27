@@ -10,7 +10,8 @@ import { herdrEnvironment } from "./herdr-environment";
 import { omoIdentity } from "./herdr-omo";
 import { findCodexSession } from "./herdr-codex-index";
 import { ensurePrivateDirectory } from "./private-directory";
-import { snifferEnvironment } from "./sniffer";
+import { snifferPaneEnvironment } from "./sniffer";
+import type { ProjectMemoryEnvironment } from "./turn-contract";
 import { standalone } from "./cli-invocation";
 
 export interface SessionRef {
@@ -129,12 +130,13 @@ export class HerdrRunner {
     });
   }
 
-  private async createTab(label: string, ref: SessionRef, workspace: string | undefined, signal: AbortSignal) {
+  private async createTab(label: string, ref: SessionRef, workspace: string | undefined, signal: AbortSignal,
+    projectEnv?: ProjectMemoryEnvironment) {
     const { cwd } = ref;
     const workspaceId = workspace ?? await this.createWorkspace(cwd, signal, this.namespaceFor(ref.id));
     const args = ["tab", "create", "--workspace", workspaceId, "--cwd", cwd, "--label", label, "--no-focus"];
-    const memory = snifferEnvironment(this.env);
-    args.push("--env", "EIN_CONFIG=" + memory.EIN_CONFIG, "--env", "EIN_HOME=" + memory.EIN_HOME);
+    const memory = snifferPaneEnvironment(projectEnv, this.env);
+    for (const [name, value] of Object.entries(memory)) args.push("--env", name + "=" + value);
     // The native index and the pane must address the same Codex profile.
     if (ref.runner === "codex") args.push("--env", "CODEX_HOME=" + this.codexHome);
     const result = await this.call(args, signal, this.namespaceFor(ref.id));
@@ -304,7 +306,8 @@ export class HerdrRunner {
     return undefined;
   }
 
-  async ensure(ref: SessionRef, signal: AbortSignal, onUpdate: (current: SessionRef) => void): Promise<SessionRef> {
+  async ensure(ref: SessionRef, signal: AbortSignal, onUpdate: (current: SessionRef) => void,
+    projectEnv?: ProjectMemoryEnvironment): Promise<SessionRef> {
     this.executable(ref.runner);
     const label = this.labelFor(ref.id);
     const layout = await this.layout(this.namespaceFor(ref.id), signal);
@@ -326,7 +329,7 @@ export class HerdrRunner {
     const existing = layout.agents.find(a => a.pane_id === found && a.agent);
     if (foreign && (ref.paneId !== found || (!ref.nativeId && (ref.runner === "omo" || !existing))))
       throw new RunnerError("Reservation outside the assigned workspace requires its recorded pane and session identity.");
-    const paneId = found ?? await this.createTab(label, ref, workspace, signal);
+    const paneId = found ?? await this.createTab(label, ref, workspace, signal, projectEnv);
     const current = { ...ref, paneId };
     if (paneId !== ref.paneId) onUpdate(current);
     // A persisted pane without a live agent may have run previously. Never restart it as a fresh session.

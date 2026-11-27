@@ -409,3 +409,12 @@ test('prompt wait defaults to one second and accepts only integers from zero thr
     assert.deepEqual(h.sleeps, expected ? [expected] : []);
   }
 });
+
+test('main prompt receives the launcher delegation guide alongside memory; the private agent retrieves independently', async () => {
+  const guide = 'Fictional launcher delegation guide';
+  const h = harness({ env: { EIN_SNIFFER_DELEGATE_GUIDE: guide }, autoReport: picked });
+  const prompt = await h.prompt('lookup', { context: ['prior context'] });
+  assert.deepEqual(prompt.context, ['prior context', guide, canonical]);
+  assert.equal(h.spawns.length, 1);
+  assert.ok(!h.spawns[0].prompt.includes(guide));
+});

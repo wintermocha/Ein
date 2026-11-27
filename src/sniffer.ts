@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { SetupError } from "./config";
+import type { ProjectMemoryEnvironment } from "./turn-contract";
 
 export function snifferEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const home = env.HOME || homedir();
@@ -10,6 +11,20 @@ export function snifferEnvironment(env: NodeJS.ProcessEnv = process.env) {
     EIN_HOME: absolute(env.EIN_HOME || "~/.ein"),
     EIN_CONFIG: absolute(env.EIN_CONFIG || "~/.config/ein/config.json"),
   };
+}
+
+export function snifferPaneEnvironment(project?: ProjectMemoryEnvironment, env: NodeJS.ProcessEnv = process.env) {
+  const binding = project ?? { ...snifferEnvironment(env),
+    EIN_SNIFFER_EXPECT_PROJECT: "", EIN_SNIFFER_DELEGATION: "none" };
+  // A long-lived herdr server may have started inside a different Sniffer run.
+  return { ...binding, EIN_SNIFFER_BIN: join(binding.EIN_HOME, "bin", "sniffer"),
+    EIN_SNIFFER_RUN_ID: "", EIN_SNIFFER_ENDPOINT: "", EIN_SNIFFER_TOKEN_FILE: "",
+    EIN_SNIFFER_HOST: "", EIN_SNIFFER_PROJECT_ID: "", EIN_SNIFFER_ROLE: "" };
+}
+
+export function snifferTurnArgv(executable: string, binding: ProjectMemoryEnvironment): string[] {
+  const env = snifferPaneEnvironment(binding);
+  return ["/usr/bin/env", ...Object.entries(env).map(([key, value]) => key + "=" + value), executable];
 }
 
 export function runSniffer(args: string[]): never {

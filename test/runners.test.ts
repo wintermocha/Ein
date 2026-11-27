@@ -40,6 +40,14 @@ switch (command) {
     const number = ++data.sequence;
     const tab = { tab_id: "t" + number, workspace_id: option("--workspace"), label: option("--label") };
     const pane = { pane_id: "p" + number, tab_id: tab.tab_id, cwd: option("--cwd") };
+    const env = { ...process.env };
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] !== "--env") continue;
+      const assignment = args[++i];
+      const split = assignment.indexOf("=");
+      env[assignment.slice(0, split)] = assignment.slice(split + 1);
+    }
+    data.memory = [env.EIN_SNIFFER_DELEGATION, env.EIN_SNIFFER_EXPECT_PROJECT, env.EIN_HOME, env.EIN_CONFIG, env.EIN_SNIFFER_ENDPOINT, env.EIN_SNIFFER_TOKEN_FILE];
     data.tabs.push(tab); data.panes.push(pane);
     result = { root_pane: pane, tab };
     break;
@@ -102,6 +110,7 @@ type Data = {
   launches: {kind: string; target: string; nativeArgs: string[]}[];
   replaceAfterGet?: boolean; renameNativeId?: string; suppressResumeReport?: boolean;
   workspaces: { workspace_id: string; label: string }[];
+  memory?: string[];
   nativeId: string | null; busyReads: number; status: string; messages: string[][]; paneRuns: string[];
 };
 let dir: string;
@@ -115,6 +124,8 @@ type AdapterOptions = { readonly namespace?: string; readonly expectedNamespace?
 function adapter(installationId = "installation-a", options: AdapterOptions = { namespace: "runner-test" }) {
   const runnerOptions = { workspaceLabel: options.workspaceLabel, installationId, stateDir: dir, env: {
     PATH: dir, FAKE_STATE: dataFile, CODEX_HOME: join(dir, "codex-profile"),
+    EIN_SNIFFER_DELEGATION: "assigned", EIN_SNIFFER_EXPECT_PROJECT: "previous",
+    EIN_SNIFFER_ENDPOINT: "previous-endpoint", EIN_SNIFFER_TOKEN_FILE: "previous-token",
     EXPECT_NAMESPACE: options.expectedNamespace ?? options.namespace ?? "ein",
     HERDR_SOCKET_PATH: "/someone-elses-session", EIN_APP_TOKEN: "receiver-only",
     EIN_BOT_TOKEN: "receiver-only", HOGU_APP_TOKEN: "receiver-only", HOGU_BOT_TOKEN: "receiver-only",
@@ -170,6 +181,19 @@ test("concurrent setup and reservations reuse exactly one named workspace and re
   patch({ workspaces: [...load().workspaces, { workspace_id: "duplicate", label: "Ein-A" }] });
   await expect(client.ensure({ ...reservation(), id: "next" }, signal, nop)).rejects.toThrow("ambiguous workspace");
   expect(load().tabs).toHaveLength(1);
+});
+
+test("a project pane inherits the assigned binding and a neutral pane clears ambient authority", async () => {
+  const runner = adapter();
+  const binding = {
+    EIN_HOME: join(dir, "custom home"), EIN_CONFIG: join(dir, "custom registry"),
+    EIN_SNIFFER_EXPECT_PROJECT: "ein", EIN_SNIFFER_DELEGATION: "assigned",
+  } as const;
+  await runner.ensure(reservation(), signal, nop, binding);
+  expect(load().memory).toEqual(["assigned", "ein", binding.EIN_HOME, binding.EIN_CONFIG, "", ""]);
+
+  await runner.ensure({ ...reservation(), id: "neutral" }, signal, nop);
+  expect(load().memory?.slice(0, 2)).toEqual(["none", ""]);
 });
 
 test("an exact persisted legacy ID resolves its prior namespace and label", async () => {

@@ -1,0 +1,90 @@
+name: Publish macOS release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: sniffer/go.mod
+          cache: false
+      - run: bun run package
+      - run: sh test/package.sh
+      - run: sh test/install-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/ein-darwin-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-main-release
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: macos-*
+          merge-multiple: true
+          path: dist
+      - name: Publish tested packages and installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
+          arm=dist/ein-darwin-arm64.tar.gz
+          intel=dist/ein-darwin-amd64.tar.gz
+          arm_sum=$(sha256sum "$arm")
+          intel_sum=$(sha256sum "$intel")
+          sed -e "s/@RELEASE_TAG@/$tag/g" \
+              -e "s/@SHA256_ARM64@/${arm_sum%% *}/g" \
+              -e "s/@SHA256_AMD64@/${intel_sum%% *}/g" scripts/install-release.sh > dist/install-release.sh
+
+          # Resume a partial draft on retry. A published release is already complete.
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft); then
+            [[ "$draft" == true ]] || exit 0
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "Ein $tag" \
+              --draft --notes-file .github/release-notes.md
+          fi
+          gh release upload "$tag" "$arm" "$intel" dist/install-release.sh --clobber
+
+          # A slower build or a retry of an older run must not roll back /latest.
+          latest_tag=$(gh api graphql -f owner="$GITHUB_REPOSITORY_OWNER" -f name="${GITHUB_REPOSITORY#*/}" \
+            -f query='query($owner:String!, $name:String!) { repository(owner:$owner, name:$name) { latestRelease { tagName } } }' \
+            --jq '.data.repository.latestRelease.tagName // ""')
+          latest=true
+          if [[ "$latest_tag" =~ ^main-([0-9]+)- ]] && (( BASH_REMATCH[1] > GITHUB_RUN_NUMBER )); then
+            latest=false
+          fi
+          gh release edit "$tag" --draft=false --latest="$latest"

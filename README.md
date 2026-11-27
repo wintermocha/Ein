@@ -22,15 +22,15 @@ Slack 작업을 맡길 실행기는 설정의 `runner`에서 Claude Code(`claude
 
 ## Mac에 설치하기
 
-Mac에서 `uname -m`이 `arm64`이면 `ein-darwin-arm64.tar.gz`, `x86_64`이면 `ein-darwin-amd64.tar.gz`를 풉니다. 압축을 푼 폴더에서 아래 명령을 실행하면 Slack 연결기와 Sniffer, 제품별 어댑터가 설치됩니다. `--with-hooks`는 Codex·Antigravity CLI의 자동 회상 hook을 등록하는 옵션입니다. 기본 설치만 원하면 옵션을 생략하세요.
+**설치하거나 업데이트하려면** Mac 터미널에서 아래 한 줄을 실행하세요. 최신 릴리스의 Apple Silicon 또는 Intel 패키지를 자동으로 골라 SHA-256을 확인하고 `~/.ein`에 설치합니다. 로컬 Git이 필요하며, Bun과 Go는 따로 설치할 필요가 없습니다.
 
 ```sh
-sh install.sh --with-hooks
-export PATH="$HOME/.ein/bin:$PATH"
-ein --help
+curl -fsSL https://github.com/wintermocha/Ein/releases/latest/download/install-release.sh | sh
 ```
 
-설치본에는 Bun 런타임과 빌드된 Go 엔진이 들어 있습니다. 기억 저장소 초기화에는 로컬 Git이 필요합니다. 새 터미널에서도 `ein`을 쓰려면 위 `export PATH` 줄을 셸 설정에 추가하세요.
+`~/.ein/bin/ein --help`로 설치를 확인하고, Slack에 연결하려면 `~/.ein/bin/ein setup`을 실행하세요. 어느 폴더에서든 `ein`으로 부르려면 `~/.zshrc`에 `export PATH="$HOME/.ein/bin:$PATH"`를 추가하고 새 터미널을 여세요. Codex·Antigravity CLI 자동 회상 hook도 등록하려면 위 명령 끝의 `| sh`를 `| sh -s -- --with-hooks`로 바꾸세요.
+
+**수동 설치**는 [GitHub Releases](https://github.com/wintermocha/Ein/releases)에서 원하는 버전의 `ein-darwin-arm64.tar.gz`(Apple Silicon) 또는 `ein-darwin-amd64.tar.gz`(Intel)를 내려받아 압축을 풀고, 그 폴더에서 `sh install.sh`를 실행하세요. `main`이 갱신될 때마다 GitHub Actions가 두 Mac용 패키지를 빌드하고 각각 설치 테스트를 통과하면 릴리스를 게시합니다.
 
 **소스에서 배포본을 만들려면** Mac에 Git, Bun, Go 1.26 이상을 준비하고 저장소 루트에서 `bun run package`를 실행합니다. `dist/`에 이 Mac의 CPU에 맞는 압축 파일이 생깁니다. 압축을 풀고 위 설치 절차를 따르면 됩니다.
 

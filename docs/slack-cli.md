@@ -1,12 +1,14 @@
 # Ein Slack CLI 운영 가이드
 
-아래 명령은 저장소 루트에서 실행합니다. [프로젝트 소개와 빠른 시작](../README.md)
+배포본을 설치했다면 터미널에서 `ein`을 사용한다. 소스에서 실행할 때는 저장소 루트에서 `ein` 대신 `bun run ein`을 사용한다. [프로젝트 소개와 빠른 시작](../README.md)
 
-아인은 Slack 대화를 수신하고 스레드별 작업 세션을 배정하는 Bun CLI다. 설치할 때 `omo`, `claude`, `codex` 중 하나를 선택하면 아인이 여는 모든 새 세션이 그 실행기를 쓴다. 프로젝트를 정할 수 있는 요청은 담당 세션으로 바로 보내고, 해석이 필요한 요청은 Ein 전용 메인 세션에 맡긴다.
+아인은 Slack 대화를 수신하고 스레드별 작업 세션을 배정하는 Bun CLI다. 에이전트 답변을 사용하려면 `orchestrate`를 시작하기 전에 설정 파일의 `runner`에 `omo`, `claude`, `codex` 중 하나를 지정한다. 프로젝트를 정할 수 있는 요청은 담당 세션으로 바로 보내고, 해석이 필요한 요청은 Ein 전용 메인 세션에 맡긴다.
 
 [Slack 대화 흐름과 전체 설정표](slack-session-map.html) · [수신기·오케스트레이터·메인 구현 상세와 검증 범위](components.html)
 
 ## 토큰 없이 실행해 보기
+
+저장소 루트에서 예제 설정과 이벤트를 사용한다.
 
 ```sh
 bun install --frozen-lockfile
@@ -18,32 +20,32 @@ bun run typecheck
 
 예제 이벤트 다섯 개를 재생하면 멘션 한 줄, 봇이 참여한 스레드의 후속 질문 한 줄, 그 봇 답글에 달린 이모지 한 줄이 나온다. `replay`는 표준 입력에서 한 줄당 하나의 Slack `event_callback` JSON을 읽고 메모리에서만 실행한다. `check`는 설정 문법과 필드를 오프라인으로 검사한다.
 
-Bun 1.4.2의 내장 `undici`에는 Slack SDK 3.2.0이 연결 상태 확인에 쓰는 `ping()`이 없다. 위 설치 명령은 SDK가 npm판 `undici`를 불러오도록 두 모듈 경로를 바꾸는 패치를 자동으로 적용한다. SDK나 Bun을 업그레이드할 때는 `bun test test/sdk-socket-integration.test.ts`로 실제 소켓의 heartbeat와 재연결도 확인한다. [의존성 및 패치 설정](../package.json)
+Bun 1.4.2의 내장 `undici`에는 Slack SDK 3.2.0이 연결 상태 확인에 쓰는 `ping()`이 없다. 위 설치 명령은 저장소의 `package.json`에 등록된 패치를 적용해 SDK가 npm판 `undici`를 불러오게 한다. SDK나 Bun을 업그레이드할 때는 `bun test test/sdk-socket-integration.test.ts`로 실제 소켓의 heartbeat와 재연결도 확인한다.
 
 ## 처음 Slack에 연결하기
 
-1. 저장소 루트에서 `bun run ein setup`을 실행한다. 새 앱이면 CLI가 보여주는 JSON을 Slack의 **Create New App → From a manifest**에 붙여넣는다. 기존 앱이면 필요한 구독과 권한을 확인한다. 앱의 **Basic Information**에서 App ID를 복사해 입력한다.
+1. `ein setup`을 실행한다. 기본 설정 경로는 `~/.config/ein/config.json`이다. 다른 위치를 쓰려면 `EIN_CONFIG`에 새 설정 파일의 경로를 지정한다. 새 앱이면 CLI가 보여주는 JSON을 Slack의 **Create New App → From a manifest**에 붙여넣는다. 기존 앱이면 필요한 구독과 권한을 확인한다. 앱의 **Basic Information**에서 App ID를 복사해 입력한다.
 2. **Basic Information → App-Level Tokens**에서 `connections:write` 앱 토큰을 만든다. **OAuth & Permissions**에서 워크스페이스에 앱을 설치하고 봇 토큰을 복사한다. 터미널의 숨김 입력란에 각각 붙여넣는다. 기존 `EIN_APP_TOKEN`과 `EIN_BOT_TOKEN`도 쓸 수 있다. 환경변수를 사용하면 이후 실행에도 같은 환경이 필요하다.
 3. 터미널에 표시된 링크에서 Ein에게 일회용 코드를 1:1 DM의 새 메시지로 보낸다. CLI에 표시된 사용자 ID가 본인인지 확인하고 승인한다. Ein이 같은 DM에 **“연결됐어요”**라고 답하면 로컬 설정이 완성된다.
 
 소유자를 확정하면 아인은 `Ein-<Slack 앱 ID>`를 herdr 워크스페이스 이름으로 설정에 저장한다. herdr가 설치돼 있으면 전용 서버 `ein`에서 워크스페이스를 준비한다. herdr를 나중에 설치해도 서버를 시작하고 첫 작업을 보내면 같은 이름의 워크스페이스가 생성된다.
 
-중단한 뒤 같은 `EIN_CONFIG`로 `bun run ein setup`을 다시 실행하면 앱 선택, 개별 토큰 입력, DM 수신까지 마친 지점에서 이어간다. DM을 보내기 전에 중단했다면 새 코드를 사용한다. `bun run ein setup --status`로 다음 단계를 확인하고, 잘못 입력한 토큰은 `bun run ein setup --tokens`로 교체한다. 기존 설정 파일이 있으면 setup이 그 위치를 새 설치에 사용하지 않는다.
+중단한 뒤 같은 `EIN_CONFIG`로 `ein setup`을 다시 실행하면 앱 선택, 개별 토큰 입력, DM 수신까지 마친 지점에서 이어간다. DM을 보내기 전에 중단했다면 새 코드를 사용한다. `ein setup --status`로 다음 단계를 확인한다. 앱 선택 후 설정 파일이 생성되기 전까지는 `ein setup --tokens`로 입력한 토큰을 교체할 수 있다. 설정 파일이 이미 있으면 `ein check`로 검사하고, 토큰을 교체할 때는 사용 중인 환경변수나 설정의 `appTokenFile`·`botTokenFile`이 가리키는 파일을 갱신한다.
 
 확인 답장을 보내는 도중 연결이 끊기면 같은 명령으로 재개한다. Ein이 해당 DM에서 이전 답장의 전송 기록을 확인하고 설정 저장을 마친다.
 
-Codex에서 이 저장소를 열고 `$ein-setup`으로 연결을 요청하면 같은 과정을 대화로 진행한다. 토큰 입력만 사용자의 로컬 터미널에서 진행한다. 완료된 설정은 DM 수신용이다. `bun run ein listen`으로 실행하고, 채널 멘션은 `watchChannels`에서 추가한다. [온보딩 스킬](../.agents/skills/ein-setup/SKILL.md)
+Codex에서 이 저장소를 열고 `$ein-setup`으로 연결을 요청하면 같은 과정을 대화로 진행한다. 토큰 입력만 사용자의 로컬 터미널에서 진행한다. 완료된 설정은 DM 수신용이다. `ein listen`으로 실행하고, 채널 멘션은 `watchChannels`에서 추가한다. [온보딩 스킬](../.agents/skills/ein-setup/SKILL.md)
 
 ## 수동 설정과 기존 설치 업그레이드
 
-기존 설치에서 업그레이드할 때는 수신기를 종료한 뒤 `EIN_CONFIG`로 기존 설정 파일을 지정한다. 설정에서 `stateFile`을 생략했다면 기존 SQLite 파일의 절대 경로를 명시한다. 같은 스레드에서 작업을 이어가려면 DB와 옆의 `.orchestration/` 디렉터리, 등록한 프로젝트 ID와 작업 경로를 유지한다. 셸이나 서비스에 토큰을 등록했다면 환경변수 이름을 `EIN_APP_TOKEN`, `EIN_BOT_TOKEN`으로 바꾼다.
+기존 설치에서 업그레이드할 때는 수신기를 종료한 뒤 `EIN_CONFIG`로 기존 설정 파일을 지정한다. 설정에서 `stateFile`을 생략했다면 기존 SQLite 파일의 절대 경로를 명시한다. 같은 스레드에서 작업을 이어가려면 DB와 그 옆의 `<stateFile>.orchestration/` 디렉터리, 등록한 프로젝트 ID와 작업 경로를 유지한다. 셸이나 서비스에 토큰을 등록했다면 환경변수 이름을 `EIN_APP_TOKEN`, `EIN_BOT_TOKEN`으로 바꾼다.
 
 아인은 Bun에서 Slack 공식 `@slack/socket-mode` 클라이언트로 이벤트를 받는다. 봇 신원 확인, 연결 공백의 기록 조회, 답글 게시는 기존처럼 봇 토큰으로 Slack Web API를 호출한다. `listen`과 `orchestrate`는 같은 수신기를 사용한다. [Slack Node SDK](https://docs.slack.dev/tools/node-slack-sdk/)
 
 1. 새 앱을 만들 때는 [Ein 앱 매니페스트](../examples/slack-manifest.json)를 사용한다. 기존 Slack 앱을 계속 쓸 때는 현재 매니페스트에 필요한 구독·권한만 추가한다. 기존 앱을 쓰면 봇 ID와 기존 DM이 이어진다. 새 앱은 별도의 봇 ID와 DM을 갖는다.
 2. Socket Mode를 켜고 **Basic Information → App-Level Tokens**에서 `connections:write`가 있는 앱 토큰(`xapp-`)을 만든다. 봇 이벤트로 `app_mention`, `message.im`, `message.channels`, `message.groups`, `reaction_added`를 구독한다. [Slack Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/)
 3. 봇에 `app_mentions:read`, `im:history`, `channels:history`, `groups:history`, `reactions:read`를 부여한다. `chat:write`는 오케스트레이터가 원래 대화에 답변을 게시하는 데도 쓰인다. 변경된 권한을 적용하려면 앱을 워크스페이스에 설치하거나 재설치하고, 감시할 공개·비공개 채널에 봇을 초대한다. [Slack App Home](https://docs.slack.dev/surfaces/app-home/#using-the-messages-tab)
-4. `examples/config.json`을 `~/.config/ein/config.json`에 복사해 예시 ID를 실제 값으로 교체한다. `appId`는 앱 설정의 App ID, `botUser`는 봇 사용자 ID, `ownerUser`는 소유자의 사용자 ID다. `ownerDm`은 선택 사항이며 지정하면 처음 보는 소유자 DM도 연결 공백 복구에 포함된다. `watchChannels`는 멘션을 받을 채널 목록이다.
+4. [예제 설정](../examples/config.json)을 `~/.config/ein/config.json`에 복사해 예시 ID를 실제 값으로 교체한다. `team`은 워크스페이스 ID, `appId`는 앱 설정의 App ID, `botUser`는 봇 사용자 ID, `ownerUser`는 소유자의 사용자 ID다. `ownerDm`은 선택 사항이며 지정하면 처음 보는 소유자 DM도 연결 공백 복구에 포함된다. `watchChannels`는 멘션을 받을 채널 목록이다.
 5. 앱 토큰과 같은 앱의 봇 토큰(`xoxb-`)을 각 토큰 파일에 따로 저장하고 파일 권한을 `600`으로 설정한다. 환경변수 `EIN_APP_TOKEN`, `EIN_BOT_TOKEN`도 지원한다. 설정의 상대 경로는 설정 파일 위치를 기준으로 해석한다. 아인은 시작할 때 봇 토큰의 팀·사용자 ID와 Socket Mode의 앱 ID를 대조한다.
 
 `blockedUsers`에 차단할 Slack 사용자 ID를 지정한다. 차단은 DM·멘션·스레드 답글·이모지에 공통으로 적용된다. `otherUserReplyRate`에는 채널별로 0~1의 숫자를 둔다. 해당 채널에서 소유자 외 사용자의 이벤트에 `REPLY=yes` 또는 `REPLY=no`가 붙는다. 수신기만 실행할 때는 리드가 답장을 결정한다. 오케스트레이션 모드에서 소유자 외 사용자는 응답 대상으로 선정되면 안내문을 받는다. 에이전트에 작업을 전달할 수 있는 사용자는 `ownerUser`다.
@@ -59,7 +61,7 @@ Slack Agent는 앱에 Agent 대화 화면과 세션 기능을 추가하는 선�
 ## 수신기 실행
 
 ```sh
-bun run ein listen
+ein listen
 ```
 
 아인은 첫 연결 시점부터 이벤트를 받는다. 감시 채널의 오래된 스레드도 새 멘션이 오면 리드에게 전달한다. 봇이 원글이나 답글을 쓴 것을 확인하면 해당 스레드를 자동으로 기록하고, 이후 멘션 없는 답글도 전달한다. 수신 기록은 기본적으로 `~/.local/state/ein/inbound.sqlite`에 저장한다.
@@ -91,7 +93,7 @@ INBOUND <source> <channel> <threadTs> <ts> <user> "<JSON-escaped text>" [REPLY=y
 ## 작업 세션과 Slack 답변 연결
 
 1. 설정 최상위의 `runner`에 설치한 실행기 하나를 넣는다. 이 실행기와 `herdr`가 아인을 실행하는 셸의 PATH에 있어야 한다.
-2. `projects`에 작업 디렉터리를 등록한다. 예제의 `projects.ein.path` 값 `..`는 **예제 파일의 상위 디렉터리**다. 설정을 복사했다면 실제 저장소 경로로 바꾼다. `channels`에는 이 프로젝트 전용 채널을 넣고, 그 채널에서 멘션도 받으려면 `watchChannels`에도 추가한다.
+2. `projects`에 작업 디렉터리를 등록한다. 예제의 `projects.ein.path` 값 `..`는 `examples/`를 기준으로 한 저장소 루트다. 설정을 복사했다면 실제 저장소 경로로 바꾼다. `channels`에는 이 프로젝트 전용 채널을 넣고, 그 채널에서 멘션도 받으려면 `watchChannels`에도 추가한다.
 3. 온보딩에서 시작한 herdr 서버가 실행 중이면 다음 단계로 넘어간다. 수동 설치나 재부팅 후 서버가 꺼져 있으면 별도 터미널에서 아래 명령으로 시작한다. 작업 탭은 서버의 환경을 상속하므로 Slack 토큰은 다음 단계의 Ein 프로세스에 제공한다.
 
 ```sh
@@ -103,10 +105,10 @@ env -u EIN_BOT_TOKEN -u EIN_APP_TOKEN herdr --session ein server
 4. Slack에 연결하고 작업을 처리할 터미널에서 아래 명령을 실행한다. 같은 앱에서 `listen`도 실행하면 Slack이 연결 간에 이벤트를 나눈다. 실제 수신 프로세스를 전환할 때는 한쪽만 연결한다.
 
 ```sh
-bun run ein orchestrate
+ein orchestrate
 ```
 
-진행 중인 작업을 보려면 다른 터미널에서 `herdr session attach ein`을 실행한다. `bun run ein setup --status`에 표시된 워크스페이스를 고르면 메인 세션과 Slack 대화·프로젝트 세션이 각각 탭으로 열린다. 새 탭이 생겨도 보고 있던 탭의 포커스는 유지된다. Codex와 Claude Code 탭에는 대화형 CLI가, OMO 탭에는 응답과 도구 실행 상황이 표시된다.
+진행 중인 작업을 보려면 다른 터미널에서 `herdr session attach ein`을 실행한다. `ein setup --status`에 표시된 워크스페이스를 고르면 메인 세션과 Slack 대화·프로젝트 세션이 각각 탭으로 열린다. 새 탭이 생겨도 보고 있던 탭의 포커스는 유지된다. Codex와 Claude Code 탭에는 대화형 CLI가, OMO 탭에는 응답과 도구 실행 상황이 표시된다.
 
 수동 설정에서 워크스페이스 이름을 정할 때는 `herdrWorkspace`에 넣는다. 이 필드가 없는 기존 설정은 새 탭을 `Ein` 워크스페이스에 연다. 업그레이드 전에 이미 실행 중이던 세션은 기존 탭에서 이어간다.
 

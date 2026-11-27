@@ -30,8 +30,9 @@ type Registry struct {
 	Scopes        []Scope `json:"scopes"`
 }
 type Snapshot struct {
-	Commit   string     `json:"commit"`
-	Registry Registry   `json:"registry"`
-	Glossary [][]string `json:"glossary"`
-	Memories []Memory   `json:"memories"`
+	FolderScope string     `json:"-"`
+	Commit      string     `json:"commit"`
+	Registry    Registry   `json:"registry"`
+	Glossary    [][]string `json:"glossary"`
+	Memories    []Memory   `json:"memories"`
 }

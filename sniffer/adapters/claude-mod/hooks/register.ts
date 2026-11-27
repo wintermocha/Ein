@@ -141,13 +141,13 @@ async function setup($: EngineInterface, s: State): Promise<void> {
 async function install($: EngineInterface, s: State): Promise<void> {
   const string = { type: "string" };
   const specs = [
-    { name: "memory_search", description: "Read-only search of this project's memories and permitted ancestors. Choose Korean or English queries and search again when helpful.",
+    { name: "memory_search", description: "Read-only search of this workspace's folder memories and permitted ancestors. Choose Korean or English queries and search again when helpful.",
       properties: { query: string, limit: { type: "integer", minimum: 1, maximum: 20 } }, required: ["query"], read: true },
     { name: "memory_read", description: "Read one permitted memory and its exact revision. offset and limit page by character, so a useful passage need not be in its opening text.",
       properties: { id: string, offset: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 16000 } }, required: ["id"], read: true },
     { name: "memory_context", description: "Read only this request's bounded main-session observation. Other sessions are inaccessible.",
       properties: {}, required: [], read: true },
-    { name: "memory_save", description: "MAIN AGENT ONLY: explicitly save Markdown with YAML frontmatter to an authorized memory scope. Use the exact expected revision (or new) and a stable request_id. Automatic retrieval never saves.",
+    { name: "memory_save", description: "MAIN AGENT ONLY: explicitly save Markdown with YAML frontmatter to an authorized memory scope. Use scope_id: folder:current for a private folder note. Use the exact expected revision (or new) and a stable request_id. Automatic retrieval never saves.",
       properties: { markdown: string, if_revision: string, request_id: string }, required: ["markdown", "if_revision", "request_id"], read: false },
     { name: "memory_promote", description: "MAIN AGENT ONLY: preview (apply=false) or explicitly commit (apply=true) an entire memory's promotion to a permitted ancestor. Use its exact revision and a stable request_id; partial promotion uses the CLI.",
       properties: { id: string, to: string, if_revision: string, request_id: string, apply: { type: "boolean" } }, required: ["id", "to", "if_revision", "request_id", "apply"], read: false },

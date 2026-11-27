@@ -67,6 +67,7 @@ type active struct {
 
 type Service struct {
 	ExpectedProject string
+	ExpectedFolder  string
 	Paths           config.Paths
 	Config          config.Config
 	Snapshot        func(context.Context) (model.Snapshot, error)
@@ -97,16 +98,28 @@ func (s *Service) resolve(b Binding) (string, string, ledger.Session, error) {
 	if err != nil {
 		return "", "", ledger.Session{}, err
 	}
-	project, err := c.Resolve(b.Cwd, "")
+	folder, err := c.Folder(b.Cwd)
+	if err != nil {
+		return "", "", ledger.Session{}, err
+	}
+	if s.ExpectedFolder != "" && (!folder.Bound || folder.Scope() != s.ExpectedFolder) {
+		return "", "", ledger.Session{}, errors.New("workspace folder changed")
+	}
+	project, err := folder.BindingID()
 	if err != nil {
 		return "", "", ledger.Session{}, err
 	}
 	if s.ExpectedProject != "" && s.ExpectedProject != project {
 		return "", "", ledger.Session{}, errors.New("workspace project changed")
 	}
-	hash := sha256.Sum256([]byte(h + "\x00" + b.ConversationID + "\x00" + project))
-	key := hex.EncodeToString(hash[:])
-	return project, key, ledger.Session{Host: h, ConversationID: b.ConversationID, ProjectID: project}, nil
+	base := ledger.Session{Host: h, ConversationID: b.ConversationID, ProjectID: project}
+	sessionKey := h + "\x00" + b.ConversationID + "\x00" + project
+	if folder.Bound {
+		base.FolderScope = folder.Scope()
+		sessionKey += "\x00" + base.FolderScope
+	}
+	hash := sha256.Sum256([]byte(sessionKey))
+	return project, hex.EncodeToString(hash[:]), base, nil
 }
 
 func (s *Service) lock(key string) (string, func(), error) {
@@ -178,7 +191,7 @@ func (s *Service) Begin(ctx context.Context, in BeginInput) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
-	anc, err := model.Ancestors(snap.Registry, "project:"+project)
+	anc, err := snap.AccessChain(project)
 	if err != nil {
 		return Response{}, err
 	}
@@ -282,7 +295,7 @@ func (s *Service) Complete(ctx context.Context, b Binding, d native.Decision) (R
 	if err != nil {
 		return Response{}, err
 	}
-	anc, err := model.Ancestors(snap.Registry, "project:"+project)
+	anc, err := snap.AccessChain(project)
 	if err != nil || strings.Join(anc, "\x00") != strings.Join(a.Ancestors, "\x00") {
 		result.Status = "stale_scope"
 		return result, nil

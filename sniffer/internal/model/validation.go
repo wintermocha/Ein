@@ -29,6 +29,8 @@ func ScopePath(scope, id string) (string, error) {
 		return "", fmt.Errorf("invalid scope ID %q", scope)
 	}
 	switch prefix {
+	case "folder":
+		return "folders/" + slug + "/" + id + ".md", nil
 	case "group":
 		return "groups/" + slug + "/" + id + ".md", nil
 	case "project":
@@ -77,8 +79,8 @@ func ValidateRegistry(r Registry) error {
 			if !exists {
 				return fmt.Errorf("scope %q has missing parent %q", s.ID, s.Parent)
 			}
-			if p.Kind == "project" {
-				return fmt.Errorf("project %q cannot be a parent", p.ID)
+			if p.Kind == "folder" || (p.Kind == "project" && s.Kind != "folder") {
+				return fmt.Errorf("scope %q cannot be a parent here", p.ID)
 			}
 			s = p
 		}
@@ -163,4 +165,28 @@ func HashMemory(m Memory) string {
 	b, _ := json.Marshal(struct{ Description, Body, Key string }{normalize(m.Description), normalize(m.Body), normalize(m.Key)})
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+// AccessChain accepts a private folder only when its immediate parent agrees
+// with the live workspace binding. Project-only readers never traverse children.
+func (s Snapshot) AccessChain(project string) ([]string, error) {
+	if s.FolderScope == "" {
+		id := strings.TrimPrefix(project, "project:")
+		if !slugPattern.MatchString(id) {
+			return nil, fmt.Errorf("invalid project scope")
+		}
+		return Ancestors(s.Registry, "project:"+id)
+	}
+	chain, err := Ancestors(s.Registry, s.FolderScope)
+	if err != nil {
+		return nil, err
+	}
+	parent := "project:" + project
+	if project == s.FolderScope {
+		parent = "global"
+	}
+	if len(chain) < 2 || chain[1] != parent {
+		return nil, fmt.Errorf("workspace folder hierarchy changed; bind the folder again")
+	}
+	return chain, nil
 }

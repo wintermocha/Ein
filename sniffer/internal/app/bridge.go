@@ -61,6 +61,7 @@ func (a app) bridge(args []string) error {
 		return a.projectSnapshot(ctx, binding)
 	})
 	service.ExpectedProject = binding.id
+	service.ExpectedFolder = binding.folder
 	ctx := context.Background()
 	var value any
 	switch args[0] {

@@ -43,7 +43,7 @@ func Run(args []string, in io.Reader, out, errout io.Writer) error {
 		return a.help()
 	}
 	policy := os.Getenv(delegationEnv)
-	if policy != "" && (policy != "assigned" || !config.ValidID(os.Getenv(expectedProjectEnv))) {
+	if policy != "" && (policy != "assigned" || !validBindingID(os.Getenv(expectedProjectEnv))) {
 		switch args[0] {
 		case "hook":
 			_, err = io.WriteString(out, "{}\n")
@@ -70,6 +70,8 @@ func Run(args []string, in io.Reader, out, errout io.Writer) error {
 		return a.json(map[string]string{"version": Version})
 	case "memory":
 		return a.memory(args[1:])
+	case "folder":
+		return a.folder(args[1:])
 	case "project":
 		return a.project(args[1:])
 	case "install-hooks":
@@ -107,11 +109,12 @@ Usage: sniffer [--home DIRECTORY] COMMAND
   memory init
   group add --id work --parent global
   project add --id app --path /absolute/project --parent group:work
+  folder inspect|bind --path DIRECTORY [--exact] [--project ID [--group ID]]
   project list
   memory search --query "검색어" [--project app] [--limit 20]
-  memory list [--scope global] [--project app]
+  memory list [--scope global] [--project app | --global]
   memory read --id MEMORY_ID [--format json|markdown] [--project app]
-  memory save --input memory.md --if-revision new|BLOB --request-id ID [--project app]
+  memory save --input memory.md --if-revision new|BLOB --request-id ID [--project app | --global]
   memory promote --id ID --to group:work --if-revision BLOB --request-id ID --dry-run|--apply
   memory recover --request-id ID
   memory recall --id ID [--force]     (inside a sniffer run session)
@@ -185,6 +188,10 @@ func (a app) memory(args []string) error {
 	case "search", "list", "read":
 		f := a.flags("memory " + args[0])
 		project := f.String("project", "", "registered project ID")
+		var global bool
+		if args[0] == "list" {
+			f.BoolVar(&global, "global", false, "list only global memory")
+		}
 		query := f.String("query", "", "search query")
 		limit := f.Int("limit", 20, "maximum hits")
 		scope := f.String("scope", "", "scope filter")
@@ -192,6 +199,12 @@ func (a app) memory(args []string) error {
 		format := f.String("format", "json", "json or markdown")
 		if err := parse(f, args[1:]); err != nil {
 			return err
+		}
+		if global {
+			if err := globalOperator(*project); err != nil {
+				return err
+			}
+			return a.listGlobal(*scope)
 		}
 		binding, err := a.bindProject(*project, "", false)
 		if err != nil {
@@ -242,6 +255,7 @@ func (a app) memory(args []string) error {
 	case "save":
 		f := a.flags("memory save")
 		project := f.String("project", "", "registered project ID")
+		global := f.Bool("global", false, "save only global memory")
 		input := f.String("input", "", "Markdown file or - for stdin")
 		revision := f.String("if-revision", "", "new or exact blob revision")
 		req := f.String("request-id", "", "idempotency ID")
@@ -249,10 +263,6 @@ func (a app) memory(args []string) error {
 			return err
 		}
 		if err := required("--input", *input, "--if-revision", *revision, "--request-id", *req); err != nil {
-			return err
-		}
-		binding, err := a.bindProject(*project, "", false)
-		if err != nil {
 			return err
 		}
 		b, err := a.readInput(*input, 128*1024)
@@ -263,13 +273,29 @@ func (a app) memory(args []string) error {
 		if err != nil {
 			return err
 		}
-		pid := binding.id
-		snap, err := a.projectSnapshot(ctx, binding)
-		if err != nil {
-			return err
-		}
-		if err = allowedScope(snap, pid, m.ScopeID); err != nil {
-			return err
+		if *global {
+			if err := globalOperator(*project); err != nil {
+				return err
+			}
+			if m.ScopeID != "global" {
+				return errors.New("--global can save only global memory")
+			}
+			if err := s.Init(ctx); err != nil {
+				return err
+			}
+		} else {
+			binding, err := a.bindProject(*project, "", false)
+			if err != nil {
+				return err
+			}
+			snap, err := a.projectSnapshot(ctx, binding)
+			if err != nil {
+				return err
+			}
+			m.ScopeID = binding.saveScope(m.ScopeID)
+			if err = allowedScope(snap, binding.id, m.ScopeID); err != nil {
+				return err
+			}
 		}
 		result, err := s.Save(ctx, m, *revision, *req)
 		if err != nil {
@@ -346,7 +372,7 @@ func (a app) memory(args []string) error {
 	return fmt.Errorf("unknown memory command %q", args[0])
 }
 func allowedScope(s model.Snapshot, pid, scope string) error {
-	anc, err := model.Ancestors(s.Registry, "project:"+pid)
+	anc, err := s.AccessChain(pid)
 	if err != nil {
 		return err
 	}

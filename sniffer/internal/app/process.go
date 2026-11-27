@@ -169,9 +169,10 @@ func (a app) serve(args []string) error {
 	factory := func(conversation string) (native.Session, error) {
 		hash := sha256.Sum256([]byte(name + "\x00" + conversation))
 		dir := filepath.Join(runDir, "agents", hex.EncodeToString(hash[:]))
-		return native.New(native.Config{Host: name, Executable: c.Agents[name].Executable, Agent: c.Agents[name].Agent, Cwd: cwd, RuntimeDir: dir, SnifferExecutable: self, EinHome: a.paths.Home, ProjectID: *pid})
+		return native.New(native.Config{Host: name, Executable: c.Agents[name].Executable, Agent: c.Agents[name].Agent, Cwd: cwd, RuntimeDir: dir, SnifferExecutable: self, EinHome: a.paths.Home, ProjectID: *pid, FolderScope: binding.folder})
 	}
 	engine := worker.New(ctx, a.paths, c, name, *pid, *run, func(ctx context.Context) (model.Snapshot, error) { return a.projectSnapshot(ctx, binding) }, factory)
+	engine.Core.ExpectedFolder = binding.folder
 	defer engine.Close()
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -246,7 +247,7 @@ func (a app) launch(args []string) error {
 	if err != nil {
 		return err
 	}
-	childEnv := append(cleanSnifferEnv(os.Environ()), "EIN_CONFIG="+configPath, expectedProjectEnv+"="+pid)
+	childEnv := append(cleanSnifferEnv(os.Environ()), "EIN_CONFIG="+configPath, expectedProjectEnv+"="+pid, expectedFolderEnv+"="+binding.folder)
 	nativeArgs = sessionModelArgs(name, c.SessionModels[name], nativeArgs)
 	if name == "claude" {
 		mod := filepath.Join(a.paths.Adapters, "claude-mod")

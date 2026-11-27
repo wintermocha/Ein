@@ -33,6 +33,7 @@ type Config struct {
 	einProjects   map[string]bool
 	SessionModels map[string]string    `json:"-"`
 	SchemaVersion int                  `json:"schema_version"`
+	Folders       []FolderRegistration `json:"folders,omitempty"`
 	Projects      []Project            `json:"projects"`
 	Agents        map[string]HostAgent `json:"agents"`
 	Recall        Recall               `json:"recall"`
@@ -152,6 +153,17 @@ func Validate(c Config) error {
 			roots[root] = p.ID
 		}
 	}
+	folderRoots := map[string]bool{}
+	for _, folder := range c.Folders {
+		root := folder.Root
+		if folderRoots[root] {
+			return errors.New("duplicate folder root")
+		}
+		folderRoots[root] = true
+		if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+			return errors.New("invalid folder root")
+		}
+	}
 	r := c.Recall
 	if r.OutputCount < 1 || r.OutputCount > 3 || r.OutputBytes < 256 || r.OutputBytes > 32*1024 || r.WaitMillis < 0 || r.WaitMillis > 5000 || r.TimeoutSeconds < 1 || r.TimeoutSeconds > 120 {
 		return errors.New("recall limits are outside supported bounds")
@@ -202,28 +214,11 @@ func (c Config) Resolve(path, explicit string) (string, error) {
 		}
 		return "", fmt.Errorf("unregistered project %q", explicit)
 	}
-	path, err := CanonicalDir(path)
+	folder, err := c.Folder(path)
 	if err != nil {
 		return "", err
 	}
-	best := ""
-	length := -1
-	for _, p := range c.Projects {
-		for _, root := range p.Roots {
-			if Within(root, path) {
-				if len(root) > length {
-					best = p.ID
-					length = len(root)
-				} else if len(root) == length && best != p.ID {
-					return "", errors.New("ambiguous project roots")
-				}
-			}
-		}
-	}
-	if best == "" {
-		return "", fmt.Errorf("unregistered working directory %q; use project add", path)
-	}
-	return best, nil
+	return folder.BindingID()
 }
 
 // ResolveWorkspaces refuses a mixed or unknown workspace rather than merging scopes.
@@ -231,9 +226,21 @@ func (c Config) ResolveWorkspaces(paths []string) (string, error) {
 	if len(paths) == 0 {
 		return "", errors.New("host event has no workspace path")
 	}
-	id := ""
+	id, root := "", ""
 	for _, path := range paths {
-		p, err := c.Resolve(path, "")
+		f, err := c.Folder(path)
+		if err != nil {
+			return "", err
+		}
+		currentRoot := ""
+		if f.Bound {
+			currentRoot = f.Root
+		}
+		if id != "" && root != currentRoot {
+			return "", errors.New("workspace spans different folders")
+		}
+		root = currentRoot
+		p, err := f.BindingID()
 		if err != nil {
 			return "", err
 		}

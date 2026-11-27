@@ -19,7 +19,7 @@ export function snifferPaneEnvironment(project?: ProjectMemoryEnvironment, env: 
   // A long-lived herdr server may have started inside a different Sniffer run.
   return { ...binding, EIN_SNIFFER_BIN: join(binding.EIN_HOME, "bin", "sniffer"),
     EIN_SNIFFER_RUN_ID: "", EIN_SNIFFER_ENDPOINT: "", EIN_SNIFFER_TOKEN_FILE: "",
-    EIN_SNIFFER_HOST: "", EIN_SNIFFER_PROJECT_ID: "", EIN_SNIFFER_ROLE: "" };
+    EIN_SNIFFER_HOST: "", EIN_SNIFFER_PROJECT_ID: "", EIN_SNIFFER_EXPECT_FOLDER: "", EIN_SNIFFER_ROLE: "" };
 }
 
 export function snifferTurnArgv(executable: string, binding: ProjectMemoryEnvironment): string[] {

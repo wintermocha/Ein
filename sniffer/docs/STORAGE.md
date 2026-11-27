@@ -14,6 +14,7 @@
 | `memory/store/global/<id>.md` | 공통 기억 | 예 |
 | `memory/store/groups/<slug>/<id>.md` | 특정 상위 그룹의 기억 | 예 |
 | `memory/store/projects/<slug>/<id>.md` | 프로젝트 전용 기억 | 예 |
+| `memory/store/folders/<folder-id>/<id>.md` | 등록한 작업 폴더 전용 기억 | 예 |
 | `memory/state/store.lock` | 프로세스 간 writer 잠금 | 아니요 |
 | `memory/state/transactions/<request-hash>.json` | 저장·승격 복구 journal | 아니요 |
 | `config.json` | 실제 프로젝트 경로와 고정 ID 연결 | 아니요 |
@@ -70,7 +71,7 @@ folder-1의 개발 서버 기본 포트는 4317이다.
 | --- | --- | --- |
 | `schema_version` | 예 | 정수 `1` |
 | `id` | 예 | 소문자 ASCII 슬러그, 최대 64자; 저장소 전체에서 유일 |
-| `scope_id` | 예 | `global`, `group:<slug>`, `project:<slug>`; registry에 등록되어 있어야 함 |
+| `scope_id` | 예 | 등록된 `global`, `group:<slug>`, `project:<slug>`, `folder:<folder-id>`. 저장할 때 `folder:current`는 현재 작업 폴더 ID로 변환된다. |
 | `description` | 예 | 비어 있지 않은 문자열; 최대 2,048 bytes |
 | `key` | 아니요 | 의미상 규칙 이름; 최대 256 bytes |
 | `aliases` | 아니요 | 문자열 배열; 최대 32개, 항목당 최대 256 bytes |

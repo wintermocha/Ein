@@ -128,6 +128,15 @@ func (e *Engine) validateEvent(v host.Event) error {
 	if err != nil {
 		return err
 	}
+	if e.Core.ExpectedFolder != "" {
+		f, err := c.Folder(v.WorkspacePaths[0])
+		if err != nil {
+			return err
+		}
+		if !f.Bound || f.Scope() != e.Core.ExpectedFolder {
+			return errors.New("workspace folder changed")
+		}
+	}
 	if id != e.Project {
 		return errors.New("workspace project changed")
 	}

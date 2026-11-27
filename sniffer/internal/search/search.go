@@ -29,25 +29,8 @@ func normalize(s string) string {
 	}), " ")
 }
 
-func projectScope(projectID string) (string, error) {
-	if projectID == "" || strings.TrimSpace(projectID) != projectID {
-		return "", errors.New("project ID is required")
-	}
-	if strings.Contains(projectID, ":") {
-		if !strings.HasPrefix(projectID, "project:") {
-			return "", errors.New("retrieval requires a project scope")
-		}
-		return projectID, nil
-	}
-	return "project:" + projectID, nil
-}
-
 func distances(s model.Snapshot, projectID string) (map[string]int, error) {
-	scope, err := projectScope(projectID)
-	if err != nil {
-		return nil, err
-	}
-	chain, err := model.Ancestors(s.Registry, scope)
+	chain, err := s.AccessChain(projectID)
 	if err != nil {
 		return nil, err
 	}

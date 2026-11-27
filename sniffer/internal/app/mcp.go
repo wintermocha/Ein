@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"ein.local/sniffer/internal/config"
+	"ein.local/sniffer/internal/model"
 	"ein.local/sniffer/internal/native"
 	"ein.local/sniffer/internal/recall"
 
@@ -161,7 +162,7 @@ func (a app) mcp(args []string) error {
 					if toolCalls > 12 || toolBytes >= 192*1024 {
 						callErr = errors.New("memory tool budget exhausted")
 					} else {
-						value, callErr = recall.ReadTool(context.Background(), a.st().Snapshot, binding.id, request, p.Name, p.Arguments)
+						value, callErr = recall.ReadTool(context.Background(), func(ctx context.Context) (model.Snapshot, error) { return a.projectSnapshot(ctx, binding) }, binding.id, request, p.Name, p.Arguments)
 						if raw, e := json.Marshal(value); e == nil {
 							toolBytes += len(raw)
 						}
@@ -225,7 +226,7 @@ func mcpTools(role string) []map[string]any {
 		}
 	}
 	return []map[string]any{
-		mcpTool("memory_save", "Explicitly save Markdown. Requires an authorized target scope, exact expected revision (or new), and stable request ID. Never called by automatic recall.", map[string]any{"markdown": strSchema(), "if_revision": strSchema(), "request_id": strSchema()}, []string{"markdown", "if_revision", "request_id"}, false),
+		mcpTool("memory_save", "Explicitly save Markdown. Use scope_id: folder:current for memory private to the bound folder. Requires an authorized target scope, exact expected revision (or new), and stable request ID. Never called by automatic recall.", map[string]any{"markdown": strSchema(), "if_revision": strSchema(), "request_id": strSchema()}, []string{"markdown", "if_revision", "request_id"}, false),
 		mcpTool("memory_promote", "Explicitly preview or apply an entire memory's move to an ancestor. apply=false previews. Partial promotion uses the CLI.", map[string]any{"id": strSchema(), "to": strSchema(), "if_revision": strSchema(), "request_id": strSchema(), "apply": map[string]any{"type": "boolean"}}, []string{"id", "to", "if_revision", "request_id", "apply"}, false),
 	}
 }
@@ -285,6 +286,7 @@ func (a app) mcpCall(binding projectBinding, name string, b json.RawMessage) (an
 		if err != nil {
 			return nil, err
 		}
+		m.ScopeID = binding.saveScope(m.ScopeID)
 		if err = allowedScope(snap, pid, m.ScopeID); err != nil {
 			return nil, err
 		}

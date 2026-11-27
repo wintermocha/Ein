@@ -132,7 +132,7 @@ func (s *agySession) configure() error {
 		"mcpServers": map[string]any{agyServerName: map[string]any{
 			"command":      s.cfg.SnifferExecutable,
 			"args":         []string{"--home", s.cfg.EinHome, "mcp", "--role", "agent-reader", "--project", s.cfg.ProjectID, "--context-file", s.contextPath, "--workspace", s.cfg.Cwd},
-			"env":          map[string]string{"EIN_SNIFFER_ROLE": "memory-agent", "EIN_SNIFFER_PROJECT_ID": s.cfg.ProjectID},
+			"env":          map[string]string{"EIN_SNIFFER_ROLE": "memory-agent", "EIN_SNIFFER_PROJECT_ID": s.cfg.ProjectID, "EIN_SNIFFER_EXPECT_PROJECT": s.cfg.ProjectID, "EIN_SNIFFER_EXPECT_FOLDER": s.cfg.FolderScope},
 			"enabledTools": agyReaderTools,
 			"tools":        toolConfig,
 		}},

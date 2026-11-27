@@ -35,6 +35,7 @@ var (
 // Session is stable across worker restarts. Epoch changes only after an explicit
 // context reset/compaction signal; a worker's run ID belongs in Claim's owner.
 type Session struct {
+	FolderScope    string `json:"folder_scope,omitempty"`
 	Host           string `json:"host"`
 	ConversationID string `json:"conversation_id"`
 	ProjectID      string `json:"project_id"`
@@ -99,8 +100,11 @@ func baseKey(s Session) (string, error) {
 		return "", errors.New("host, conversation ID, project ID and nonnegative epoch are required")
 	}
 	project := strings.TrimPrefix(s.ProjectID, "project:")
-	if project == "" || strings.Contains(project, ":") {
+	if project == "" || strings.Contains(strings.TrimPrefix(project, "folder:"), ":") || project == "folder:" {
 		return "", errors.New("delivery requires a project ID")
+	}
+	if s.FolderScope != "" {
+		return digest(s.Host, s.ConversationID, project, s.FolderScope), nil
 	}
 	return digest(s.Host, s.ConversationID, project), nil
 }

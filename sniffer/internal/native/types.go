@@ -16,6 +16,7 @@ type Config struct {
 	SnifferExecutable string
 	EinHome           string
 	ProjectID         string
+	FolderScope       string
 }
 
 type Reference struct {
@@ -76,9 +77,9 @@ Return ONLY JSON with decision (inject or none), references (up to 3 objects con
 func DecisionSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"properties": map[string]any{
-			"decision": map[string]any{"type": "string", "enum": []string{"inject", "none"}},
+			"decision":   map[string]any{"type": "string", "enum": []string{"inject", "none"}},
 			"references": map[string]any{"type": "array", "maxItems": 3, "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"id": map[string]any{"type": "string"}, "revision": map[string]any{"type": "string"}}, "required": []string{"id", "revision"}}},
-			"reason": map[string]any{"type": "string", "maxLength": 512},
+			"reason":     map[string]any{"type": "string", "maxLength": 512},
 		}, "required": []string{"decision", "references", "reason"}}
 }
 

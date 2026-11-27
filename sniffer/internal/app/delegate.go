@@ -68,7 +68,7 @@ func (a app) resolveDelegation(project, directory string) (delegatedProject, err
 	if err != nil {
 		return b, err
 	}
-	parent, err := (projectBinding{id: os.Getenv(expectedProjectEnv), workspace: parentDir}).resolve(c)
+	parent, err := (projectBinding{id: os.Getenv(expectedProjectEnv), workspace: parentDir, folder: os.Getenv(expectedFolderEnv)}).resolve(c)
 	if err != nil {
 		return b, fmt.Errorf("delegating parent: %w", err)
 	}
@@ -118,6 +118,16 @@ func (a app) resolveDelegation(project, directory string) (delegatedProject, err
 	}
 	b.ProjectID = project
 	b.Env = map[string]string{"EIN_CONFIG": configPath, "EIN_HOME": a.paths.Home, expectedProjectEnv: project}
+	f, err := c.Folder(b.Directory)
+	if err != nil {
+		return b, err
+	}
+	if f.Bound {
+		b.Env[expectedFolderEnv] = f.Scope()
+	}
+	if lock := os.Getenv(expectedFolderEnv); os.Getenv(delegationEnv) == "assigned" && lock != "" && lock != b.Env[expectedFolderEnv] {
+		return b, errors.New("assigned parent cannot delegate to a different folder")
+	}
 	if policy := os.Getenv(delegationEnv); policy != "" {
 		b.Env[delegationEnv] = policy
 	}

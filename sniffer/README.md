@@ -48,6 +48,22 @@ ein memory read --id search-index-owner --format markdown
 
 가령 Slack 설정의 `projects.catalog.path`가 위 폴더를 가리킨다면, 소유자가 `ein orchestrate` 실행 중인 봇에 “`project:catalog` 상품 인덱스 작업 이어줘”라고 요청할 수 있습니다. 프로젝트를 배정한 뒤 아인은 에이전트 턴에 프로젝트 ID, 등록 루트, 작업 디렉터리, 사용할 Sniffer 실행 파일과 설정 위치를 함께 넘깁니다. 에이전트는 그 범위에서 이전 결정과 인수인계를 검색하고 필요한 기억을 읽습니다. 공유 라우팅·검토 단계와 프로젝트 미지정 턴에는 프로젝트 기억을 연결하지 않습니다. [Slack 오케스트레이션](../docs/slack-cli.md)
 
+## 하위 에이전트에 작업 맡기기
+
+부모의 현재 폴더에서 `ein delegate`를 실행하면 자식이 사용할 프로젝트 ID, 실제 작업 경로, 메모리 환경 변수를 JSON으로 확인할 수 있습니다. `--` 뒤에 실행 파일과 인자를 넣으면 같은 검증을 거쳐 그 폴더에서 자식 프로세스를 시작합니다.
+
+```sh
+ein delegate
+ein delegate --cwd services/indexer
+ein delegate --cwd services/indexer -- ein run codex
+```
+
+`--cwd`는 부모의 현재 폴더를 기준으로 해석합니다. 심볼릭 링크를 해석한 실제 경로에 등록된 프로젝트가 부모와 다르면 실행을 멈춥니다. 터미널에서 다른 프로젝트로 위임할 때는 `ein delegate --project catalog --cwd /work/catalog -- ein run claude`처럼 대상 ID와 경로를 지정하세요. Slack에서는 대화의 프로젝트 배정 절차로 돌아가 대상 프로젝트를 지정합니다.
+
+호스트 자체의 하위 에이전트 기능을 쓰려면 명령 없이 검증한 `workingDirectory`와 `env`를 자식 실행 설정에 적용합니다. 부모의 기억 에이전트 연결이나 Slack 토큰은 전달하지 않습니다. 호스트에서 작업 경로 또는 메모리 범위를 지정할 수 없는 경우에는 부모가 필요한 기억을 조회해 작업 설명에 담습니다. 이때 자식에게 연결된 Sniffer 도구를 끄고, 자식 프로세스에서는 `EIN_SNIFFER_DELEGATION=none`으로 Sniffer 명령의 메모리 접근을 막을 수 있습니다. 직접 접근을 끌 수 없으면 부모가 작업을 이어갑니다.
+
+`ein run`으로 시작한 Claude Code에는 플러그인이 이 규칙을 전달합니다. Codex와 Antigravity에서 자동 안내를 받으려면 아래의 제품별 hook을 설치하고 활성화하세요. `ein delegate` 명령 자체는 hook 없이도 사용할 수 있습니다.
+
 ## 터미널 에이전트에서 자동 회상하기
 
 등록한 폴더에서 `ein run claude`, `ein run codex`, `ein run agy` 중 사용할 제품을 실행하세요. 해당 제품의 CLI와 로그인은 그 제품의 설치 환경을 사용합니다. Codex에서 hook 신뢰 확인이 표시되면 설치 경로와 명령을 확인하세요.

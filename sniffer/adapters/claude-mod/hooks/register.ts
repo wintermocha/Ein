@@ -396,7 +396,11 @@ export function register(on: On) {
       if (delivery && (!live(s, delivery.run) || next.signal.aborted)) {
         await ack($, delivery, "uncertain"); delivery = undefined;
       }
-      const result = await next(delivery ? { ...e, context: [...(e.context || []), delivery.context] } : e);
+      const guide = await $.env.get("EIN_SNIFFER_DELEGATE_GUIDE");
+      const context = [...(e.context || [])];
+      if (guide) context.push(guide);
+      if (delivery) context.push(delivery.context);
+      const result = await next(guide || delivery ? { ...e, context } : e);
       accepted = !result.drop && !next.signal.aborted;
       emitted = !!delivery && !next.signal.aborted && !result.drop && !!result.context?.includes(delivery.context) && live(s, delivery.run);
       return result;

@@ -15,6 +15,12 @@ export type ThreadWindow = {
   readonly after: string | null;
   readonly before: string;
 };
+export type ProjectMemoryEnvironment = {
+  readonly EIN_CONFIG: string;
+  readonly EIN_HOME: string;
+  readonly EIN_SNIFFER_EXPECT_PROJECT: string;
+  readonly EIN_SNIFFER_DELEGATION: "assigned";
+};
 export type MemoryScope =
   | { readonly kind: "workspace" }
   | {
@@ -24,7 +30,7 @@ export type MemoryScope =
       readonly workingDirectory: string;
       readonly command: {
         readonly executable: string;
-        readonly env: { readonly EIN_CONFIG: string; readonly EIN_HOME: string; readonly EIN_SNIFFER_EXPECT_PROJECT: string };
+        readonly env: ProjectMemoryEnvironment;
       };
     };
 

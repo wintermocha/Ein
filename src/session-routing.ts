@@ -145,7 +145,7 @@ export class SessionRouting {
     // reserve() pinned this session to the selected registration before the turn was claimed.
     return { kind: "project", projectId, projectRoot: session.cwd, workingDirectory: session.cwd,
       command: { executable: join(EIN_HOME, "bin", "sniffer"),
-        env: { EIN_HOME, EIN_CONFIG, EIN_SNIFFER_EXPECT_PROJECT: projectId } } };
+        env: { EIN_HOME, EIN_CONFIG, EIN_SNIFFER_EXPECT_PROJECT: projectId, EIN_SNIFFER_DELEGATION: "assigned" } } };
   }
 
   apply(job: Job, target: Target, request: TurnRequest, result: TurnResult): void {

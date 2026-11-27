@@ -15,6 +15,7 @@ const help = `Ein (아인) — Slack orchestration and project memory
   ${einCommand} project add --id ID --path DIRECTORY
   ${einCommand} memory search --query TEXT
   ${einCommand} run claude|codex|agy [-- NATIVE_ARGUMENTS]
+  ${einCommand} delegate [--cwd DIRECTORY] [--project ID] [-- COMMAND ARG...]
   ${einCommand} sniffer help
 
 EIN_CONFIG selects the JSON config (default ~/.config/ein/config.json).
@@ -34,7 +35,7 @@ async function main(args: string[]) {
     return runOmoBridge(args.slice(1));
   }
   if (command === "sniffer") return runSniffer(args.slice(1));
-  if (["memory", "project", "group", "run"].includes(command)) return runSniffer(args);
+  if (["memory", "project", "group", "run", "delegate"].includes(command)) return runSniffer(args);
   if (command === "setup") {
     const { setup } = await import("./setup");
     return setup(configPath, args.slice(1));

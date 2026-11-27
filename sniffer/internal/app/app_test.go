@@ -266,3 +266,54 @@ fi
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestLauncherDeliversOrdinaryDelegationGuidanceThroughNativeHooks(t *testing.T) {
+	for _, name := range []string{"codex", "agy"} {
+		t.Run(name, func(t *testing.T) {
+			p, project, _ := fixture(t)
+			fake := filepath.Join(t.TempDir(), "host")
+			body := `#!/bin/sh
+[ "$EIN_SNIFFER_DELEGATION" = assigned ] || exit 20
+case "$EIN_SNIFFER_HOST" in
+  codex) printf '{"hook_event_name":"SessionStart","source":"startup","session_id":"main","cwd":"%s"}' "$PWD" | "$EIN_SNIFFER_BIN" hook codex ;;
+  agy) printf '{"conversationId":"main","workspacePaths":["%s"]}' "$PWD" | "$EIN_SNIFFER_BIN" hook agy --event PreInvocation ;;
+esac
+`
+			if err := os.WriteFile(fake, []byte(body), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := config.Update(p, func(c *config.Config) error {
+				c.Agents[name] = config.HostAgent{Executable: fake}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			exe, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(exe, "--home", p.Home, "run", name)
+			cmd.Env = append(os.Environ(), "TEST_EIN_SNIFFER_APP_HELPER=1", delegationEnv+"=assigned", expectedProjectEnv+"=app")
+			cmd.Dir = project
+			b, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("run %s: %s %v", name, b, err)
+			}
+			var output struct {
+				HookSpecificOutput struct{ AdditionalContext string }
+				InjectSteps        []struct {
+					SystemMessage struct{ SystemMessage string }
+				}
+			}
+			if err := json.Unmarshal(b, &output); err != nil {
+				t.Fatalf("invalid %s hook output: %s (%v)", name, b, err)
+			}
+			if name == "codex" && output.HookSpecificOutput.AdditionalContext != delegationGuide {
+				t.Fatalf("Codex SessionStart context: %s", b)
+			}
+			if name == "agy" && (len(output.InjectSteps) != 1 || output.InjectSteps[0].SystemMessage.SystemMessage != delegationGuide) {
+				t.Fatalf("Antigravity PreInvocation context: %s", b)
+			}
+		})
+	}
+}

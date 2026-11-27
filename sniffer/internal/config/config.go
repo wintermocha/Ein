@@ -31,6 +31,7 @@ type Recall struct {
 }
 type Config struct {
 	einProjects   map[string]bool
+	SessionModels map[string]string    `json:"-"`
 	SchemaVersion int                  `json:"schema_version"`
 	Projects      []Project            `json:"projects"`
 	Agents        map[string]HostAgent `json:"agents"`

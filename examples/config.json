@@ -11,6 +11,11 @@
   "botTokenFile": "~/.config/ein/bot-token",
   "stateFile": "~/.local/state/ein/inbound.sqlite",
   "runner": "omo",
+  "models": {
+    "claude": "opus",
+    "codex": "gpt-6.2-astra",
+    "agy": "gemini-4-carbon"
+  },
   "herdrWorkspace": "Ein-AEIN",
   "projects": {
     "ein": { "path": "..", "channels": ["CTEAM"] }

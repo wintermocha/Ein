@@ -12,6 +12,8 @@
 
 Slack 작업을 맡길 실행기는 설정의 `runner`에서 Claude Code(`claude`), Codex CLI(`codex`), OMO(`omo`) 중 하나를 고릅니다. Antigravity CLI에서 프로젝트 기억을 사용하려면 등록한 폴더의 터미널에서 `ein run agy`를 실행하세요.
 
+새 작업 세션의 기본 모델은 Claude Code의 `opus`, Codex의 `gpt-6.2-astra`, Antigravity의 `gemini-4-carbon`입니다. 바꾸려는 실행기만 Ein 설정의 `models`에 지정하세요. 예를 들어 `"models": { "claude": "sonnet" }`은 새 Claude 작업을 Sonnet으로 시작합니다. OMO는 `models.omo`를 생략하면 자체 모델 설정을 사용합니다. 추론 강도는 각 실행기의 설정을 따릅니다. [전체 설정 예제](examples/config.json)
+
 **Sniffer**는 프로젝트별 장기 기억을 저장하고 검색합니다. Slack에서 내린 결정을 같은 프로젝트의 터미널 세션에서 찾아볼 수 있습니다. Slack 없이 시작하려면 작업 폴더를 등록하고 첫 기억을 저장해 보세요. [Sniffer에서 첫 기억 저장·검색하기](sniffer/README.md#slack-없이-프로젝트-기억-사용하기)
 
 ## 에이전트 실행 흐름

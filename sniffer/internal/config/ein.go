@@ -1,13 +1,20 @@
 package config
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
+
+//go:embed session-models.json
+var defaultSessionModels []byte
+
+var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]*$`)
 
 func expandPath(base, path string) (string, error) {
 	if path == "~" || strings.HasPrefix(path, "~/") {
@@ -40,6 +47,14 @@ func Load(p Paths) (Config, error) {
 	if err != nil {
 		return c, err
 	}
+	var ein struct {
+		Projects map[string]struct{ Path string } `json:"projects"`
+		Models   map[string]string                `json:"models"`
+	}
+	if err := json.Unmarshal(defaultSessionModels, &ein.Models); err != nil {
+		return c, fmt.Errorf("invalid built-in session models: %w", err)
+	}
+	c.SessionModels = ein.Models
 	file, err := EinConfigPath()
 	if err != nil {
 		return c, err
@@ -51,11 +66,21 @@ func Load(p Paths) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	var ein struct {
-		Projects map[string]struct{ Path string } `json:"projects"`
-	}
 	if err := json.Unmarshal(data, &ein); err != nil {
-		return c, fmt.Errorf("invalid Ein project configuration: %w", err)
+		return c, fmt.Errorf("invalid Ein configuration: %w", err)
+	}
+	if ein.Models == nil {
+		return c, fmt.Errorf("Ein models must be an object")
+	}
+	for host, id := range ein.Models {
+		switch host {
+		case "claude", "codex", "agy", "omo":
+		default:
+			return c, fmt.Errorf("unknown Ein models host %q", host)
+		}
+		if !modelID.MatchString(id) {
+			return c, fmt.Errorf("invalid Ein model for %s", host)
+		}
 	}
 	ids := make([]string, 0, len(ein.Projects))
 	for id := range ein.Projects {

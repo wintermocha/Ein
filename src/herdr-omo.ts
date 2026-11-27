@@ -56,10 +56,12 @@ function createPaneObserver() {
 
 // A pane hosts one RPC process. The private socket persists across orchestrator restarts.
 // Its API deliberately exposes only readiness and prompt admission, never a terminal or shell.
-async function serve(executable: string, sessionFile: string, socketPath: string) {
+async function serve(executable: string, sessionFile: string, socketPath: string, model?: string) {
   process.umask(0o077);
   const { EIN_BOT_TOKEN, EIN_APP_TOKEN, HOGU_BOT_TOKEN, HOGU_APP_TOKEN, ...env } = process.env;
-  const child = Bun.spawn([executable, "--mode", "rpc", "--session", sessionFile], {
+  const command = [executable, "--mode", "rpc", "--session", sessionFile];
+  if (model) command.push("--model", model);
+  const child = Bun.spawn(command, {
     env, stdin: "pipe", stdout: "pipe", stderr: "inherit",
   });
   type Reply = { success: boolean; data?: unknown };
@@ -125,9 +127,9 @@ async function serve(executable: string, sessionFile: string, socketPath: string
 }
 
 export async function runOmoBridge(args: string[]) {
-  const [executable, file, socket] = args;
-  if (!executable || !file || !socket || args.length !== 3) throw new Error("Invalid OMO bridge arguments.");
-  await serve(executable, file, socket);
+  const [executable, file, socket, model] = args;
+  if (!executable || !file || !socket || args.length > 4) throw new Error("Invalid OMO bridge arguments.");
+  await serve(executable, file, socket, model);
 }
 
 if (import.meta.main) await runOmoBridge(process.argv.slice(2));

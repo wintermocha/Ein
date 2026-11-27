@@ -2,6 +2,7 @@ import { accessSync, constants, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
+import defaultModels from "../sniffer/internal/config/session-models.json";
 import { einCommand } from "./cli-invocation";
 
 export class SetupError extends Error {
@@ -12,6 +13,10 @@ const channelId = z.string().regex(/^[CDG][A-Z0-9]+$/);
 const watchChannelId = z.string().regex(/^[CG][A-Z0-9]+$/);
 const userId = z.string().regex(/^[UW][A-Z0-9]+$/);
 const runnerSchema = z.enum(["omo", "claude", "codex"]);
+const modelId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]*$/u);
+const sessionModels = z.strictObject({
+  claude: modelId.optional(), codex: modelId.optional(), agy: modelId.optional(), omo: modelId.optional(),
+});
 const projectId = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const projectSchema = z.strictObject({
   path: z.string().min(1),
@@ -38,10 +43,15 @@ const configSchema = z.strictObject({
   stateFile: z.string().min(1).default("~/.local/state/ein/inbound.sqlite"),
   herdrWorkspace: z.string().trim().min(1).regex(/^[^\x00-\x1f\x7f]+$/u).optional(),
   runner: runnerSchema.optional(),
+  models: sessionModels.optional(),
   projects: projectsSchema.default({}),
 });
 
 export type Config = z.infer<typeof configSchema>;
+
+export function sessionModel(host: Runner | "agy", models?: Config["models"]): string | undefined {
+  return models?.[host] ?? (host === "omo" ? undefined : defaultModels[host]);
+}
 
 function pathFrom(base: string, path: string): string {
   if (path === "~") return homedir();

@@ -1,10 +1,48 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestEinSessionModels(t *testing.T) {
+	p, err := Locate(filepath.Join(t.TempDir(), "sniffer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "ein.json")
+	t.Setenv("EIN_CONFIG", file)
+	want := map[string]string{"claude": "opus", "codex": "gpt-6.2-astra", "agy": "gemini-4-carbon"}
+	for _, settings := range []string{"", `{}`, `{"models":{}}`} {
+		if settings != "" {
+			if err := AtomicWrite(file, []byte(settings), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		c, err := Load(p)
+		if err != nil || !maps.Equal(c.SessionModels, want) {
+			t.Fatalf("config %q: got %v, want %v, err %v", settings, c.SessionModels, want, err)
+		}
+	}
+	if err := AtomicWrite(file, []byte(`{"models":{"claude":"opus[1m]","omo":"provider/model@v1:fast+2"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	want["claude"], want["omo"] = "opus[1m]", "provider/model@v1:fast+2"
+	c, err := Load(p)
+	if err != nil || !maps.Equal(c.SessionModels, want) {
+		t.Fatalf("partial override: got %v, want %v, err %v", c.SessionModels, want, err)
+	}
+	for _, models := range []string{`null`, `[]`, `"opus"`, `{"other":"opus"}`, `{"codex":null}`, `{"agy":1}`, `{"claude":""}`, `{"codex":"--help"}`, `{"omo":"a b"}`} {
+		if err := AtomicWrite(file, []byte(`{"models":`+models+`}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(p); err == nil {
+			t.Errorf("accepted models %s", models)
+		}
+	}
+}
 
 func TestProjectBoundariesAndAliases(t *testing.T) {
 	root := t.TempDir()

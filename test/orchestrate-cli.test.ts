@@ -17,7 +17,8 @@ test("orchestrate recovers an ACKed mention and an accepted POST, then sends onl
     return existsSync(file) ? readFileSync(file, "utf8").trimEnd().split("\n").map(line => JSON.parse(line)) : [];
   };
   const run = async (phase: string, runner: string) => {
-    writeFileSync(configFile, JSON.stringify({ ...config, runner }));
+    const models = { codex: phase === "followup" ? "changed-model" : "configured-model" };
+    writeFileSync(configFile, JSON.stringify({ ...config, runner, models }));
     const child = Bun.spawn([
       process.execPath, "--no-env-file", "--preload", "./test/fixtures/orchestrate-slack.ts", "src/cli.ts", "orchestrate",
     ], {
@@ -52,7 +53,8 @@ test("orchestrate recovers an ACKed mention and an accepted POST, then sends onl
 
     const calls = rows("herdr.jsonl");
     expect(calls.filter(call => call.command === "tab create").map(call => call.cwd)).toEqual([project]);
-    expect(calls.filter(call => call.command === "agent start").map(call => call.kind)).toEqual(["codex"]);
+    expect(calls.filter(call => call.command === "agent start").map(call => [call.kind, call.model]))
+      .toEqual([["codex", "configured-model"]]);
     const turns = calls.filter(call => call.command === "agent prompt");
     expect(turns).toHaveLength(2);
     expect(new Set(turns.map(turn => turn.jobId)).size).toBe(2);

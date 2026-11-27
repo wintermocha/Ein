@@ -247,6 +247,7 @@ func (a app) launch(args []string) error {
 		return err
 	}
 	childEnv := append(cleanSnifferEnv(os.Environ()), "EIN_CONFIG="+configPath, expectedProjectEnv+"="+pid)
+	nativeArgs = sessionModelArgs(name, c.SessionModels[name], nativeArgs)
 	if name == "claude" {
 		mod := filepath.Join(a.paths.Adapters, "claude-mod")
 		if _, err = os.Stat(filepath.Join(mod, ".claude-plugin", "plugin.json")); err != nil {

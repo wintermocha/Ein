@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "../src/config";
+import { loadConfig, sessionModel } from "../src/config";
 
 const minimum = { team: "TTEST", appId: "ATEST", botUser: "UBOT", ownerUser: "UOWNER", watchChannels: [] };
 let folder: string;
@@ -39,6 +39,22 @@ test("receiver-only configs require no runner or projects", () => {
   expect(result.runner).toBeUndefined();
   expect(result.projects).toEqual({});
   expect(preflight().err).toContain("runner");
+});
+
+test("each host uses its configured model or its own default", () => {
+  const { models } = config({ models: { claude: "opus[1m]", omo: "provider/custom-model" } });
+  expect(sessionModel("claude", models)).toBe("opus[1m]");
+  expect(sessionModel("omo", models)).toBe("provider/custom-model");
+  expect(sessionModel("codex", models)).toBe("gpt-6.2-astra");
+  expect(sessionModel("agy", models)).toBe("gemini-4-carbon");
+  expect(sessionModel("claude", config().models)).toBe("opus");
+  expect(sessionModel("omo", config().models)).toBeUndefined();
+});
+
+test("rejects unknown hosts and invalid model selectors", () => {
+  for (const models of [null, [], { unknown: "opus" }, { claude: "" }, { codex: "a b" }, { agy: "--effort" }]) {
+    expect(() => config({ models })).toThrow("models");
+  }
 });
 
 test.each(["omo", "claude", "codex"])("accepts the global %s runner without executing it", runner => {

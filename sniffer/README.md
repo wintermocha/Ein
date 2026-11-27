@@ -75,6 +75,8 @@ ein delegate --cwd services/indexer -- ein run codex
 | Codex | `ein run codex` | hook으로 관찰을 전달하고 `codex app-server`에서 기억을 검색합니다. hook 신뢰 확인이 표시되면 경로와 명령을 검토해 승인하세요. |
 | Antigravity CLI | `ein run agy` | hook을 통해 주 세션과 연결합니다. `agy`에서 스트리밍 대화와 전용 reader MCP를 사용할 수 있어야 합니다. |
 
+새 작업 세션은 Ein 설정의 `models.claude`, `models.codex`, `models.agy`를 읽습니다. 기본값은 각각 `opus`, `gpt-6.2-astra`, `gemini-4-carbon`입니다. `ein delegate -- ein run codex`로 위임해도 같은 설정을 씁니다. 한 번만 모델을 바꾸려면 `ein run claude -- --model sonnet`처럼 실행하세요. 기억 검색 에이전트의 모델은 [제품별 연결 설정](docs/INTEGRATIONS.md#1-제품별로-다른-연결부)을 따릅니다.
+
 `sniffer doctor --host codex`로 해당 CLI의 로컬 기능을 점검할 수 있습니다. 다른 제품은 `claude` 또는 `agy`를 지정하세요. 로그인과 모델 접근 권한, 실제 회상 결과는 제품 세션에서 확인하세요.
 
 기억 에이전트는 검색어를 고르고 본문을 읽은 뒤 관련 기억의 ID와 revision을 반환합니다. Go 엔진은 실제 본문을 전달하기 전에 최신 버전, 허용 범위, 이전 전달 여부를 확인합니다. 저장과 상위 범위 공유는 메인 모델의 별도 writer 요청 또는 명시적 CLI 명령으로 수행합니다. 한영 검색어, Git 기반 충돌 처리, 중단된 쓰기 복구는 v0.4.0의 공통 엔진을 사용합니다. [제품별 연결](docs/INTEGRATIONS.md) · [엔진 구조](docs/ARCHITECTURE.md) · [운영·복구](docs/OPERATIONS.md)

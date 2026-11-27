@@ -93,6 +93,7 @@ INBOUND <source> <channel> <threadTs> <ts> <user> "<JSON-escaped text>" [REPLY=y
 ## 작업 세션과 Slack 답변 연결
 
 1. 설정 최상위의 `runner`에 설치한 실행기 하나를 넣는다. 이 실행기와 `herdr`가 아인을 실행하는 셸의 PATH에 있어야 한다.
+   새 세션에서 쓸 모델은 같은 파일의 `models.claude`, `models.codex`, `models.omo`에서 선택한다. 생략하면 각각 `opus`, `gpt-6.2-astra`, OMO 자체 기본값을 사용한다. 설정 파일을 고친 뒤 `ein orchestrate`를 다시 시작하면 다음 새 세션부터 적용된다. 기존 Slack 세션을 재개할 때는 실행기가 저장한 모델 설정을 따른다.
 2. `projects`에 작업 디렉터리를 등록한다. 예제의 `projects.ein.path` 값 `..`는 `examples/`를 기준으로 한 저장소 루트다. 설정을 복사했다면 실제 저장소 경로로 바꾼다. `channels`에는 이 프로젝트 전용 채널을 넣고, 그 채널에서 멘션도 받으려면 `watchChannels`에도 추가한다.
 3. 온보딩에서 시작한 herdr 서버가 실행 중이면 다음 단계로 넘어간다. 수동 설치나 재부팅 후 서버가 꺼져 있으면 별도 터미널에서 아래 명령으로 시작한다. 작업 탭은 서버의 환경을 상속하므로 Slack 토큰은 다음 단계의 Ein 프로세스에 제공한다.
 

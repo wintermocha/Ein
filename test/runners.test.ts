@@ -251,7 +251,7 @@ test.each(["codex", "claude"] as const)("%s resumes the exact saved native conve
   expect(resumed.paneId).toBe("p2");
   expect(load().panes.map(pane => pane.cwd)).toEqual([ref.cwd]);
   expect(load().launches).toEqual([
-    { kind, target: "p1", nativeArgs: ["--add-dir", ref.resultDir] },
+    { kind, target: "p1", nativeArgs: ["--model", kind === "codex" ? "gpt-6.2-astra" : "opus", "--add-dir", ref.resultDir] },
     { kind, target: "p2", nativeArgs: [kind === "codex" ? "resume" : "--resume", nativeId, "--add-dir", ref.resultDir] },
   ]);
 });

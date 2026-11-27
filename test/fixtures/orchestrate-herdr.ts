@@ -44,7 +44,7 @@ switch (command) {
     const active = { ...agent, name: args[2]!, resultDir: args.includes("--add-dir") ? option("--add-dir")! : "" };
     snapshot.agents.push(active);
     save();
-    log({ command, kind: active.agent });
+    log({ command, kind: active.agent, model: args.includes("--model") ? option("--model") : undefined });
     output({ type: "agent_started", agent: active });
     break;
   }

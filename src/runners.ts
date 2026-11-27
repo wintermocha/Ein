@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
-import type { Runner } from "./config";
+import { sessionModel, type Config, type Runner } from "./config";
 import { withWorkspaceLock } from "./herdr-workspace-lock";
 import { herdrEnvironment } from "./herdr-environment";
 import { omoIdentity } from "./herdr-omo";
@@ -47,6 +47,7 @@ const quote = (arg: string) => "'" + arg.replaceAll("'", "'\\''") + "'";
 const legacySessionId = /^hogu-[0-9a-f]{32}$/u;
 
 interface RunnerOptions {
+  models?: Config["models"];
   workspaceLabel?: string | undefined;
   namespace?: string;
   installationId?: string;
@@ -55,6 +56,7 @@ interface RunnerOptions {
 }
 
 export class HerdrRunner {
+  private readonly models: Config["models"];
   private readonly workspaceLabel: string;
   private readonly namespace: string | undefined;
   private readonly installationId: string;
@@ -63,6 +65,7 @@ export class HerdrRunner {
   private readonly codexHome: string;
 
   constructor(options: RunnerOptions = {}) {
+    this.models = options.models;
     this.workspaceLabel = options.workspaceLabel ?? "Ein";
     this.namespace = options.namespace;
     this.installationId = options.installationId ?? "";
@@ -207,6 +210,10 @@ export class HerdrRunner {
       }
       const bridge = standalone ? [process.execPath, "__omo-bridge"] : [process.execPath, join(import.meta.dir, "herdr-omo.ts")];
       const command = [...bridge, executable, file, this.socket(ref)];
+      if (!ref.nativeId && !existsSync(file)) {
+        const model = sessionModel("omo", this.models);
+        if (model) command.push(model);
+      }
       await this.call(["pane", "run", ref.paneId ?? "", "exec " + command.map(quote).join(" ")], signal, this.namespaceFor(ref.id));
     }
     const deadline = Date.now() + 30_000;
@@ -238,6 +245,9 @@ export class HerdrRunner {
       if (ref.nativeId) {
         if (!uuid.safeParse(ref.nativeId).success) throw new RunnerError("Invalid native session ID.");
         native.push(ref.runner === "claude" ? "--resume" : "resume", ref.nativeId);
+      } else {
+        const model = sessionModel(ref.runner, this.models);
+        if (model) native.push("--model", model);
       }
       if (ref.resultDir) native.push("--add-dir", ref.resultDir);
       await this.call(native.length ? [...args, "--", ...native] : args, signal, this.namespaceFor(ref.id));

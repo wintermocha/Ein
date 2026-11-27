@@ -2,7 +2,7 @@
 
 배포본을 설치했다면 터미널에서 `ein`을 사용한다. 소스에서 실행할 때는 저장소 루트에서 `ein` 대신 `bun run ein`을 사용한다. [프로젝트 소개와 빠른 시작](../README.md)
 
-아인은 Slack 대화를 수신하고 스레드별 작업 세션을 배정하는 Bun CLI다. 에이전트 답변을 사용하려면 `orchestrate`를 시작하기 전에 설정 파일의 `runner`에 `omo`, `claude`, `codex` 중 하나를 지정한다. 프로젝트를 정할 수 있는 요청은 담당 세션으로 바로 보내고, 해석이 필요한 요청은 Ein 전용 메인 세션에 맡긴다.
+아인은 Slack 대화를 열려 있는 에이전트에 연결하거나 프로젝트별 작업 세션에 배정한다. 현재 세션과 대화할 때는 `ein slack connect`를 사용한다. 프로젝트별 세션을 Ein이 배정하는 `ein orchestrate`를 사용할 때는 설정 파일의 `runner`에 `omo`, `claude`, `codex` 중 하나를 지정한다.
 
 [Slack 대화 흐름과 전체 설정표](slack-session-map.html) · [수신기·오케스트레이터·메인 구현 상세와 검증 범위](components.html)
 
@@ -35,6 +35,21 @@ Bun 1.4.2의 내장 `undici`에는 Slack SDK 3.2.0이 연결 상태 확인에 �
 확인 답장을 보내는 도중 연결이 끊기면 같은 명령으로 재개한다. Ein이 해당 DM에서 이전 답장의 전송 기록을 확인하고 설정 저장을 마친다.
 
 Codex에서 이 저장소를 열고 `$ein-setup`으로 연결을 요청하면 같은 과정을 대화로 진행한다. 토큰 입력만 사용자의 로컬 터미널에서 진행한다. 완료된 설정은 DM 수신용이다. `ein listen`으로 실행하고, 채널 멘션은 `watchChannels`에서 추가한다. [온보딩 스킬](../.agents/skills/ein-setup/SKILL.md)
+
+## 열어 둔 에이전트와 Slack 대화하기
+
+처음 연결할 때는 터미널에서 `ein setup --slack`으로 Slack 앱과 소유자 DM을 설정한다. 이미 Slack 설정이 있으면 그대로 사용한다. 같은 앱에는 `listen`, `orchestrate`, `slack connect` 중 한 수신기만 실행한다. `slack connect`는 소유자가 보낸 DM과 감시 채널의 멘션·후속 메시지를 연결된 에이전트에 순서대로 전달한다.
+
+- **herdr의 Codex 또는 Claude Code**. 에이전트와 같은 작업 폴더, 같은 herdr 서버에서 `herdr agent list`로 pane ID를 확인한다. 다른 터미널에서 예를 들어 `ein slack connect --pane w1:p2`를 실행해 둔다. 이름 있는 서버를 쓴다면 두 명령에 같은 `HERDR_SESSION`을 지정한다. 에이전트가 작업 중이면 입력을 받을 수 있을 때까지 기다린다. herdr에서 에이전트의 네이티브 세션 ID를 확인할 수 있어야 한다.
+- **셸 명령을 실행할 수 있는 다른 에이전트**. 같은 작업 폴더의 별도 터미널에서 `ein slack connect --session my-agent`를 실행한다. 열어 둔 에이전트에 “`ein slack next --session my-agent`로 기다리고, 메시지를 받으면 안내된 명령으로 답한 뒤 다시 기다려 줘”라고 지시한다. `my-agent`는 해당 세션에서만 쓸 이름이다. 에이전트가 직접 두 명령을 실행하고 같은 `CODEX_THREAD_ID`를 제공하는 환경에서는 이름을 생략할 수 있다.
+
+에이전트는 수신한 요청의 접수 번호와 `ein slack reply`를 사용한다. 답변은 최초 DM 또는 스레드로만 돌아간다. 같은 접수 번호로 같은 답변을 다시 제출해도 한 번만 전송한다. 수신기를 재시작할 때는 같은 작업 폴더, `EIN_CONFIG`, 에이전트 세션을 사용한다. 입력 전달 여부가 불확실하면 같은 세션에서 `slack next`에 원래의 `--pane` 또는 `--session`을 붙여 미응답 요청을 다시 확인한다.
+
+### Slack과 CLI에서 작업 위임하기
+
+현재 에이전트에 `ein orchestration enable codex`를 실행하도록 요청한다. 실행기는 `codex`, `claude`, `omo` 중 선택할 수 있다. 그 폴더에서 `ein task "실패한 테스트의 원인을 찾아 줘"`를 호출하면 선택한 CLI가 새 자식 세션에서 작업하고 마지막 답변을 표준 출력으로 돌려준다. 부모 에이전트는 이 답변을 받아 CLI에서 계속 대화하거나 Slack 요청의 답장에 사용한다. 필요한 맥락은 위임할 작업에 포함한다.
+
+위임 설정은 실제 작업 폴더별로 `EIN_HOME`에 저장한다. `ein orchestration status`로 확인하고 `ein orchestration disable`로 끈다. 실행기를 설치하고 로그인하면 Slack 설정과 프로젝트 등록 없이도 CLI에서 사용할 수 있다.
 
 ## 수동 설정과 기존 설치 업그레이드
 

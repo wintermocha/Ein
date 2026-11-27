@@ -10,7 +10,7 @@
 
 **Ein Slack CLI**는 Slack 대화를 로컬 코딩 에이전트에 연결합니다. 소유자가 채널에서 봇을 멘션해 `project:ein 테스트 결과를 확인해 줘`라고 보내면, 아인이 등록된 프로젝트 폴더에서 작업 세션을 열고 결과를 같은 스레드에 답합니다. 그 스레드에서 “실패한 테스트만 다시 봐 줘”라고 하면 같은 세션이 작업을 이어갑니다. [Slack CLI 운영 가이드](docs/slack-cli.md)
 
-Slack 작업을 맡길 실행기는 설정의 `runner`에서 Claude Code(`claude`), Codex CLI(`codex`), OMO(`omo`) 중 하나를 고릅니다. Antigravity CLI에서 프로젝트 기억을 사용하려면 등록한 폴더의 터미널에서 `ein run agy`를 실행하세요.
+이미 열어 둔 에이전트와 대화하려면 `ein slack connect`를 사용하세요. Slack 연결과 서브 에이전트 위임은 독립적으로 켤 수 있습니다. 기존 `ein orchestrate`로 Slack 요청을 프로젝트별 세션에 자동 배정할 때는 설정의 `runner`에서 Claude Code(`claude`), Codex CLI(`codex`), OMO(`omo`) 중 하나를 고릅니다. Antigravity CLI에서 프로젝트 기억을 사용하려면 등록한 폴더의 터미널에서 `ein run agy`를 실행하세요.
 
 새 작업 세션의 기본 모델은 Claude Code의 `claude-opus-5-5`, Codex의 `gpt-6.2-astra`, Antigravity의 `gemini-4-carbon`입니다. 바꾸려는 실행기만 Ein 설정의 `models`에 지정하세요. 예를 들어 `"models": { "claude": "sonnet" }`은 새 Claude 작업을 Sonnet으로 시작합니다. OMO는 `models.omo`를 생략하면 자체 모델 설정을 사용합니다. 추론 강도는 각 실행기의 설정을 따릅니다. [전체 설정 예제](examples/config.json)
 
@@ -73,6 +73,16 @@ ein setup
 Codex에서 이 저장소를 열고 **“`$ein-setup`으로 Slack 연결해 줘”**라고 요청해도 됩니다. 에이전트가 한 단계씩 안내하고, 토큰은 내 터미널에서 비공개로 입력합니다. [온보딩 스킬](.agents/skills/ein-setup/SKILL.md)
 
 **DM 수신을 확인하려면** `ein listen`을 실행한 뒤 Ein에게 새 DM을 보내세요. 터미널에 `INBOUND dm`으로 시작하는 줄과 메시지 본문이 출력됩니다.
+
+### 지금 열어 둔 에이전트와 대화하기
+
+| 원하는 사용 방식 | 시작 방법 |
+| --- | --- |
+| Slack에서 현재 에이전트와 대화 | 처음 한 번 `ein setup --slack`으로 Slack을 연결합니다. 에이전트와 같은 작업 폴더의 다른 터미널에서 `ein slack connect --pane w1:p2`를 실행하세요. `w1:p2`는 `herdr agent list`에 나온 실제 Codex 또는 Claude Code pane ID로 바꿉니다. |
+| CLI에서 서브 에이전트에 위임 | 현재 에이전트에 “이 폴더에서 `ein orchestration enable codex`를 실행하고, 앞으로 나눌 수 있는 작업은 위임해 줘”라고 요청하세요. Slack 설정 없이 쓸 수 있습니다. |
+| Slack 대화 중에도 위임 | 같은 작업 폴더에서 위 두 기능을 켜세요. 연결된 에이전트가 `ein task "테스트 실패 원인을 조사해 줘"`로 자식 에이전트의 결과를 받아 원래 DM이나 스레드에 답합니다. |
+
+herdr 밖에서도 연결할 수 있습니다. 같은 작업 폴더에서 `ein slack connect --session my-agent`를 실행해 둔 뒤, 열려 있는 에이전트에 “`ein slack next --session my-agent`로 메시지를 기다리고 답한 뒤 다시 기다려 줘”라고 요청하세요. 폴더의 위임 설정은 `ein orchestration status`로 확인하고 `ein orchestration disable`로 끕니다. [세션 연결 및 재시작 방법](docs/slack-cli.md#열어-둔-에이전트와-slack-대화하기)
 
 ### Slack에서 프로젝트 작업 맡기기
 

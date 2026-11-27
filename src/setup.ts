@@ -14,11 +14,13 @@ const command = einCommand + " setup";
 const apps = "https://api.slack.com/apps";
 const manifest = JSON.stringify(manifestJSON, null, 2) + "\n";
 const existing = `설정 파일이 이미 있습니다. 현재 설정은 ${einCommand} check로 검사하세요.`;
+const connectGuide = `현재 에이전트에 Slack을 연결하려면 작업 폴더에서 ${einCommand} slack connect --help를 확인하세요.`;
 const tokenGuide = {
   app: "Basic Information → App-Level Tokens에서 connections:write 권한의 앱 토큰을 만드세요.",
   bot: "OAuth & Permissions에서 워크스페이스에 앱을 설치한 뒤 Bot User OAuth Token을 복사하세요.",
 } as const;
 const usage = `${command}
+  --slack            현재 에이전트에 사용할 Slack 앱과 소유자 DM만 연결
   --memory [폴더 ...]    도구의 기억과 대화를 검토해 가져오기 (Slack 연결 없이 사용 가능)
   --status         현재 단계와 다음 할 일 확인
   --manifest       새 Slack 앱에 붙여넣을 JSON 출력
@@ -78,7 +80,7 @@ async function pair(store: SetupStore, appId: string, signal: AbortSignal): Prom
   const { appToken, botToken } = tokens(store);
   // A new pairing attempt invalidates any previously captured candidate.
   store.save({ appId });
-  console.log("Slack 앱과 봇을 확인합니다. 같은 앱의 listen 또는 orchestrate가 실행 중이면 DM 확인 전에 종료하세요.");
+  console.log("Slack 앱과 봇을 확인합니다. 같은 앱의 listen, slack connect 또는 orchestrate가 실행 중이면 DM 확인 전에 종료하세요.");
   const identity = await setupIdentity(botToken, signal);
   const code = "ein-" + randomBytes(12).toString("hex");
   const match = await waitForSetupDm({ appId, appToken, ...identity, code, signal,
@@ -90,7 +92,7 @@ async function pair(store: SetupStore, appId: string, signal: AbortSignal): Prom
     appTokenHash: createHash("sha256").update(appToken).digest("hex") });
 }
 
-async function confirm(store: SetupStore, user: string, signal: AbortSignal): Promise<void> {
+async function confirm(store: SetupStore, user: string, signal: AbortSignal, slackOnly = false): Promise<void> {
   const { appId, owner, appTokenHash } = store.read();
   if (!appId || !owner || owner.ownerUser !== user) {
     throw new SetupError(`저장된 DM의 사용자와 일치하지 않습니다. ${command} --status로 확인하세요.`);
@@ -106,11 +108,13 @@ async function confirm(store: SetupStore, user: string, signal: AbortSignal): Pr
   await confirmSetupReply(store, { botToken, botUser: identity.botUser, ownerDm: owner.ownerDm, signal });
   const workspace = store.finish({ appId, ...owner });
   console.log(`Slack 연결 완료 · ${owner.team} · 소유자 ${user}\nDM에 답장을 보냈습니다. 이제 ${einCommand} listen으로 메시지를 받을 수 있습니다.`);
+  console.log(connectGuide);
+  if (slackOnly) return;
   console.log(await prepareSetupWorkspace(workspace, signal));
   console.log(workspaceGuide(workspace));
 }
 
-async function wizard(store: SetupStore, signal: AbortSignal): Promise<void> {
+async function wizard(store: SetupStore, signal: AbortSignal, slackOnly: boolean): Promise<void> {
   let { appId } = store.read();
   if (!appId) {
     console.log(`1/3 Slack 앱 선택 · ${apps}`);
@@ -127,10 +131,10 @@ async function wizard(store: SetupStore, signal: AbortSignal): Promise<void> {
   if (!store.read().owner) await pair(store, appId, signal);
   const { owner, reply } = store.read();
   if (!owner) throw new SetupError("등록할 DM을 먼저 확인하세요.");
-  if (reply && !reply.retryAt) return confirm(store, owner.ownerUser, signal);
+  if (reply && !reply.retryAt) return confirm(store, owner.ownerUser, signal, slackOnly);
   const answer = await askSetup(`워크스페이스 ${owner.team}의 ${owner.ownerUser} 계정을 소유자로 등록하고 DM으로 답장할까요? [y/N]`, signal);
-  if (["y", "yes", "예"].includes(answer.toLowerCase())) await confirm(store, owner.ownerUser, signal);
-  else console.log(`확정을 보류했습니다. 이어서 진행하려면 ${command}, 다른 계정으로 연결하려면 ${command} --pair를 실행하세요.`);
+  if (["y", "yes", "예"].includes(answer.toLowerCase())) await confirm(store, owner.ownerUser, signal, slackOnly);
+  else console.log(`확정을 보류했습니다. 이어서 진행하려면 ${command}${slackOnly ? " --slack" : ""}, 다른 계정으로 연결하려면 ${command} --pair를 실행하세요.`);
 }
 
 export async function setup(configPath: string, args: string[]): Promise<void> {
@@ -144,12 +148,14 @@ export async function setup(configPath: string, args: string[]): Promise<void> {
     return;
   }
   const memoryOnly = action === "--memory";
-  const allowed = args.length === 0 || memoryOnly || (args.length === 1 && (action === "--pair" || action === "--tokens"))
+  const slackOnly = action === "--slack" && args.length === 1;
+  const allowed = args.length === 0 || memoryOnly || slackOnly || (args.length === 1 && (action === "--pair" || action === "--tokens"))
     || (args.length === 2 && (action === "--app" || action === "--confirm"));
   if (!allowed) throw new SetupError(`사용법은 ${command} --help로 확인하세요.`);
-  if (!memoryOnly && store.configExists()) { console.log(existing + ` 기억 가져오기는 ${command} --memory로 열 수 있습니다.`); return; }
+  if (!memoryOnly && store.configExists()) { console.log(existing + " " + (slackOnly ? connectGuide : `기억 가져오기는 ${command} --memory로 열 수 있습니다.`)); return; }
   if (memoryOnly && (!hasSetupTerminal() || !hasMemoryEngine())) throw new SetupError("Ein과 Sniffer가 설치된 터미널에서 setup --memory를 실행하세요.");
   if (!action && !hasSetupTerminal()) { console.log(status(store)); return; }
+  if (slackOnly && !hasSetupTerminal()) throw new SetupError(`직접 사용하는 터미널에서 ${command} --slack을 실행하세요.`);
 
   const unlock = store.lock();
   const controller = new AbortController();
@@ -166,7 +172,7 @@ export async function setup(configPath: string, args: string[]): Promise<void> {
       if (imported && !["y", "yes", "예"].includes((await askSetup("Slack 연결도 이어서 할까요? [y/N]", controller.signal)).toLowerCase())) return;
     }
     if (store.configExists()) { console.log(existing); return; }
-    if (!action) return await wizard(store, controller.signal);
+    if (!action || slackOnly) return await wizard(store, controller.signal, slackOnly);
     if (action === "--app" && value) selectApp(store, value);
     else {
       const { appId } = store.read();

@@ -223,3 +223,37 @@ test("the wizard keeps tokens private when confirmation is deferred to a later p
     await child.exited;
   }
 }, 18_000);
+
+test("Slack-only onboarding pairs the open agent without starting memory import or herdr", async () => {
+  const bin = join(root, ".ein", "bin");
+  mkdirSync(bin, { recursive: true });
+  const marker = join(root, "unexpected-start");
+  for (const binary of ["herdr", "sniffer"]) {
+    writeFileSync(join(bin, binary), '#!/bin/sh\ntouch "$MARKER"\nexit 1\n', { mode: 0o700 });
+  }
+  peer = startPeerTLS({ onPost: async () => Response.json({ ok: true, channel: owner.ownerDm, ts: "1700000000.000001" }) });
+  let transcript = "";
+  const decoder = new TextDecoder();
+  await using term = new Bun.Terminal({ data(_terminal, data) { transcript += decoder.decode(data, { stream: true }); } });
+  const child = Bun.spawn([process.execPath, "--no-env-file", "--preload", "./test/fixtures/sdk-slack-redirect.ts",
+    "src/cli.ts", "setup", "--slack"], { terminal: term, timeout: 12000, killSignal: "SIGKILL",
+    env: { HOME: root, PATH: bin + ":/usr/bin", EIN_CONFIG: config, MARKER: marker,
+      NODE_EXTRA_CA_CERTS: peer.caFile, EIN_TEST_SLACK_API: peer.apiUrl, ...envTokens } });
+  try {
+    await waitFor(() => transcript.includes("기존 앱]"), "Slack app selection");
+    term.write("2\r");
+    await waitFor(() => transcript.includes("Basic Information → App ID"), "app ID prompt");
+    term.write(owner.appId + "\r");
+    await waitFor(() => challengePattern.test(transcript), "Slack-only DM challenge");
+    peer.send(1, dm(transcript.match(challengePattern)?.[0] ?? "", "pair"));
+    await waitFor(() => transcript.includes("[y/N]"), "owner confirmation");
+    term.write("y\r");
+    expect(await child.exited).toBe(0);
+    expect(loadConfig(config).ownerDm).toBe(owner.ownerDm);
+    expect(transcript).toContain("slack connect");
+    expect(existsSync(marker)).toBe(false);
+  } finally {
+    child.kill("SIGKILL");
+    await child.exited;
+  }
+}, 18000);

@@ -12,7 +12,7 @@
   "stateFile": "~/.local/state/ein/inbound.sqlite",
   "runner": "omo",
   "models": {
-    "claude": "opus",
+    "claude": "claude-opus-5-5",
     "codex": "gpt-6.2-astra",
     "agy": "gemini-4-carbon"
   },

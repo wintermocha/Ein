@@ -47,7 +47,7 @@ test("each host uses its configured model or its own default", () => {
   expect(sessionModel("omo", models)).toBe("provider/custom-model");
   expect(sessionModel("codex", models)).toBe("gpt-6.2-astra");
   expect(sessionModel("agy", models)).toBe("gemini-4-carbon");
-  expect(sessionModel("claude", config().models)).toBe("opus");
+  expect(sessionModel("claude", config().models)).toBe("claude-opus-5-5");
   expect(sessionModel("omo", config().models)).toBeUndefined();
 });
 

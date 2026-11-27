@@ -14,7 +14,7 @@ func TestEinSessionModels(t *testing.T) {
 	}
 	file := filepath.Join(t.TempDir(), "ein.json")
 	t.Setenv("EIN_CONFIG", file)
-	want := map[string]string{"claude": "opus", "codex": "gpt-6.2-astra", "agy": "gemini-4-carbon"}
+	want := map[string]string{"claude": "claude-opus-5-5", "codex": "gpt-6.2-astra", "agy": "gemini-4-carbon"}
 	for _, settings := range []string{"", `{}`, `{"models":{}}`} {
 		if settings != "" {
 			if err := AtomicWrite(file, []byte(settings), 0600); err != nil {

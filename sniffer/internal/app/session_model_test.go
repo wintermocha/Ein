@@ -54,7 +54,7 @@ func TestRunSessionModel(t *testing.T) {
 		want       []string
 		delegated  bool
 	}{
-		{"claude default", "claude", []string{"-p", "two words"}, []string{"--model", "opus", "-p", "two words"}, false},
+		{"claude default", "claude", []string{"-p", "two words"}, []string{"--model", "claude-opus-5-5", "-p", "two words"}, false},
 		{"claude explicit", "claude", []string{"--model=sonnet", "-p", "two words"}, nil, false},
 		{"claude resume", "claude", []string{"--resume", "previous"}, nil, false},
 		{"delegated codex exec", "codex", []string{"exec", "two words"}, []string{"-c", `model="custom-codex"`, "exec", "two words"}, true},

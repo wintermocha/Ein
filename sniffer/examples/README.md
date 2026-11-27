@@ -1,10 +1,36 @@
-# 가상 기억 샘플
+# 가상 기억 데모
 
-이 디렉터리의 모든 기억·프로젝트·설정값·근거 번호는 **기능 검토용 가상 데이터**다. 실제 사용자 선호나 실제 프로젝트의 규칙을 의미하지 않는다.
+세 가상 프로젝트에서 한영 검색, 프로젝트별 기억의 공개 범위, 상위 그룹으로의 승격을 확인합니다. Git과 Bash가 필요합니다. 데모는 임시 폴더에 기억 저장소와 프로젝트를 만들고 검토할 수 있도록 결과를 남깁니다.
 
-`../scripts/demo.sh`를 실행하면 새 임시 디렉터리에 독립 Sniffer home과 세 프로젝트를 만든다. 현재 사용자의 `~/.ein/`와 실제 프로젝트 저장소는 수정하지 않는다. `EIN_SNIFFER_BIN=/absolute/path/sniffer bash scripts/demo.sh`로 실행할 바이너리를 지정한다.
+## 실행과 결과 확인
 
-| 기억 ID | scope | 가상 내용 | 기본적으로 읽는 프로젝트 |
+저장소 또는 압축을 푼 배포본의 `sniffer/examples/`에서 시작하세요. 배포본은 다음과 같이 실행합니다.
+
+```sh
+SNIFFER="$PWD/../../bin/sniffer"
+bash ../scripts/demo.sh "$SNIFFER"
+```
+
+소스에서는 같은 폴더에서 Go로 빌드한 뒤 실행합니다.
+
+```sh
+SNIFFER="$(mktemp -d)/sniffer"
+go build -o "$SNIFFER" ../cmd/sniffer
+bash ../scripts/demo.sh "$SNIFFER"
+```
+
+실행이 끝나면 터미널에 각 검사의 `PASS`와 `DEMO_ROOT`가 표시됩니다. 같은 터미널에서 아래 첫 줄의 경로를 출력된 값으로 바꾸세요.
+
+```sh
+DEMO_ROOT='/출력된/데모/폴더'
+cat "$DEMO_ROOT/results/summary.txt"
+cat "$DEMO_ROOT/results/22-sibling-hidden.json" "$DEMO_ROOT/results/23-fixture-visible.json"
+cat "$DEMO_ROOT/results/31-partial-preview.json"
+```
+
+두 검색 결과에서 같은 검색어 `SAMPLE-B`를 비교해 보세요. folder-1에서는 형제 프로젝트의 기억을 찾을 수 없고, folder-2에서는 `m-test-fixture`가 나옵니다. 데모는 `group add`와 `project add`로 아래 범위를 등록합니다. [범위 계층](scopes.json)
+
+| 기억 ID | 범위 | 가상 내용 | 읽을 수 있는 프로젝트 |
 | --- | --- | --- | --- |
 | `m-pref-language` | `global` | 한국어 설명, 원문 코드 식별자 | folder-1, folder-2, folder-3 |
 | `m-review-format` | `group:work` | 문제 → 근거 → 수정안 리뷰 | folder-1, folder-2, folder-3 |
@@ -13,27 +39,30 @@
 | `m-test-fixture` | `project:folder-2` | SAMPLE-B fixture | folder-2 |
 | `m-theme-color` | `project:folder-3` | darkblue 테마 | folder-3 |
 
-논리 계층은 `scopes.json`에 표시했다. 이 파일은 구조 검토용이며 데모는 `group add`와 `project add` 명령으로 같은 계층을 등록한다.
+## 부분 승격 검토하기
 
-## 부분 승격 입력
+데모는 승격을 미리보기까지만 실행합니다. 부분 승격 입력은 공통 `PORT` 규칙을 `group:payments`의 새 기억 `m-port-configuration`으로 분리하고, 로컬 포트 4317은 folder-1의 원본에 남깁니다. [부분 승격 입력](partial-promotion.json)
 
-`partial-promotion.json`은 `m-local-port`에서 공통 PORT 규칙을 분리해 `group:payments`의 새 기억 `m-port-configuration`으로 만드는 예제다. 원본에는 folder-1의 4317 설정을 남긴다. 저장기는 새 기억의 `derived_from`을 원본 ID와 실제 blob revision으로 채우고, 원본 본문에 새 ID 참조를 추가한다.
+같은 `sniffer/examples/` 폴더에서 아래 명령으로 데모 저장소에 있는 원본의 현재 `revision`을 읽으세요.
 
-데모는 승격의 **미리보기만** 수행한다. 적용하려면 데모가 출력한 `EIN_HOME`을 지정하고 `memory read --project folder-1 --id m-local-port` 결과의 `revision`을 사용한다.
-
-```bash
-export EIN_HOME=/actual/path/printed/by/demo/sniffer
-
-sniffer memory read --project folder-1 --id m-local-port
-
-sniffer memory promote \
-  --project folder-1 \
-  --id m-local-port \
-  --to group:payments \
-  --if-revision ACTUAL_BLOB_REVISION \
-  --request-id sample-partial-review-01 \
-  --partial examples/partial-promotion.json \
-  --dry-run
+```sh
+EIN_HOME="$DEMO_ROOT/sniffer" EIN_CONFIG="$DEMO_ROOT/ein-config.json" \
+  "$SNIFFER" memory read --project folder-1 --id m-local-port
 ```
 
-내용과 `newly_visible_projects`를 검토한 뒤 같은 명령의 마지막 옵션을 `--apply`로 바꾸면 한 commit으로 새 공유 파일 생성과 원본 수정이 반영된다. 미리보기는 journal과 Git을 변경하지 않으므로 같은 request ID를 적용 명령에 사용할 수 있다. 이 예제에서 새로 공통 규칙을 읽게 되는 프로젝트는 folder-2이고, 4317은 folder-1에 남는다.
+아래 `REVISION`에 방금 읽은 값을 넣으세요.
+
+```sh
+REVISION='출력된 revision 값'
+EIN_HOME="$DEMO_ROOT/sniffer" EIN_CONFIG="$DEMO_ROOT/ein-config.json" \
+  "$SNIFFER" memory promote \
+    --project folder-1 \
+    --id m-local-port \
+    --to group:payments \
+    --if-revision "$REVISION" \
+    --request-id sample-partial-review-01 \
+    --partial ./partial-promotion.json \
+    --dry-run
+```
+
+`newly_visible_projects`에는 공통 규칙을 새로 읽게 될 `project:folder-2`가 표시됩니다. 데모 저장소에 적용하려면 같은 요청 ID로 마지막 옵션만 `--apply`로 바꿔 실행하세요. 한 커밋에 새 기억과 수정된 원본이 저장됩니다. 새 기억의 `derived_from`에는 원본 ID와 revision이, 원본 본문에는 새 기억의 ID가 남습니다.

@@ -8,6 +8,7 @@ import type { Orchestration } from "./orchestrator";
 import { recover } from "./recovery";
 import { listenSocket } from "./socket";
 import { ReceiverState } from "./state";
+import type { AttachedTarget } from "./slack-session";
 
 // One operator diagnostic per sustained outage. stdout belongs to the lead.
 class Outage {
@@ -68,15 +69,17 @@ async function verifyIdentity(config: Config, botToken: string, signal: AbortSig
   }
 }
 
-export async function listen(config: Config, controller: AbortController, mode: "listen" | "orchestrate" = "listen"): Promise<void> {
+export async function listen(config: Config, controller: AbortController, mode: "listen" | "orchestrate" | AttachedTarget = "listen"): Promise<void> {
   const runner = mode === "orchestrate" ? requireOrchestration(config) : undefined;
   const { appToken, botToken } = credentials(config);
   const { signal } = controller;
-  const state = new ReceiverState(config.stateFile, config.team, config.botUser, mode);
+  const state = new ReceiverState(config.stateFile, config.team, config.botUser, typeof mode === "string" ? mode :
+    { session: JSON.stringify([config.ownerUser, process.cwd(), mode.id]) });
   const connection = new Outage();
   const history = new Outage();
   let delivery: ReturnType<typeof setImmediate> | undefined;
   let orchestration: Orchestration | undefined;
+  let attached: Awaited<ReturnType<typeof import("./slack-session").serveAttached>> | undefined;
   let failure: SetupError | undefined;
   function failLocal() {
     failure ??= new SetupError(mode === "listen"
@@ -86,6 +89,7 @@ export async function listen(config: Config, controller: AbortController, mode: 
   }
   function receive(event: unknown) {
     const tracked = state.consume(event, config);
+    attached?.wake();
     if (orchestration) {
       orchestration.wake();
     } else if (mode === "listen" && !delivery) {
@@ -130,6 +134,13 @@ export async function listen(config: Config, controller: AbortController, mode: 
   try {
     if (mode === "listen") state.drain(writeRecord);
     await verifyIdentity(config, botToken, signal);
+    if (typeof mode !== "string" && !signal.aborted) {
+      const { serveAttached } = await import("./slack-session");
+      attached = await serveAttached(mode, state, config, botToken, signal, error => {
+        failure = error;
+        controller.abort();
+      });
+    }
     if (runner && !signal.aborted) {
       const { prepareOrchestration } = await import("./orchestrator");
       orchestration = prepareOrchestration({ config, queue: state.jobs, runner, botToken, signal, onFatal: failLocal });
@@ -150,7 +161,7 @@ export async function listen(config: Config, controller: AbortController, mode: 
     });
   } finally {
     try {
-      await Promise.all([checkpoints.stop().catch(failLocal), orchestration?.stop()]);
+      await Promise.all([checkpoints.stop().catch(failLocal), orchestration?.stop(), attached?.stop()]);
     } finally {
       if (delivery) clearImmediate(delivery);
       connection.clear();

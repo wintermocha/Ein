@@ -14,7 +14,7 @@ const watchChannelId = z.string().regex(/^[CG][A-Z0-9]+$/);
 const userId = z.string().regex(/^[UW][A-Z0-9]+$/);
 const runnerSchema = z.enum(["omo", "claude", "codex"]);
 const modelId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]*$/u);
-const sessionModels = z.strictObject({
+export const sessionModels = z.strictObject({
   claude: modelId.optional(), codex: modelId.optional(), agy: modelId.optional(), omo: modelId.optional(),
 });
 const projectId = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);

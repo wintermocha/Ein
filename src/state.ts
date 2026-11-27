@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { lstatSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { JobQueue } from "./job-queue";
+import { AttachedInbox } from "./attached-inbox";
 import { route, type Policy, type RoutedEvent } from "./routing";
 
 type Thread = { readonly channel: string; readonly threadTs: string };
@@ -45,10 +46,11 @@ const schema = `
 export class ReceiverState {
   readonly #db: Database;
   readonly jobs: JobQueue;
+  readonly inbox?: AttachedInbox;
   #closed = false;
 
   constructor(path: string, private readonly team: string, botUser: string,
-    private readonly mode: "listen" | "orchestrate" = "listen") {
+    private readonly mode: "listen" | "orchestrate" | { readonly session: string } = "listen") {
     if (path !== ":memory:") prepareFile(path);
     this.#db = new Database(path, { strict: true });
     try {
@@ -70,6 +72,7 @@ export class ReceiverState {
         }
       }).immediate();
       this.jobs = new JobQueue(this.#db);
+      if (typeof mode === "object") this.inbox = new AttachedInbox(this.#db, this.jobs, mode.session);
       // A confirmed Slack post is authoritative even if the corresponding Socket Mode echo is lost.
       this.#db.exec(`CREATE TRIGGER IF NOT EXISTS track_confirmed_delivery AFTER UPDATE OF status ON slack_deliveries
         WHEN NEW.status = 'sent' AND OLD.status != 'sent' BEGIN
@@ -92,6 +95,7 @@ export class ReceiverState {
       if (this.#db.query("SELECT 1 FROM threads WHERE channel = ? AND threadTs = ? AND owned = 1")
         .get(channel, threadTs)) return true;
       // Orchestration accepts follow-ups as soon as a first mention queues, even before our reply.
+      if (this.inbox) return this.inbox.ownsThread(channel, threadTs);
       return this.mode === "orchestrate" && Boolean(this.#db.query(`SELECT 1 FROM jobs
         WHERE channel = ? AND threadTs = ? AND source IN ('mention', 'thread-mention') LIMIT 1`)
         .get(channel, threadTs));
@@ -119,13 +123,16 @@ export class ReceiverState {
         const { key, channel, source, user, text, ts } = inbound;
         const marker = this.#db.query("INSERT OR IGNORE INTO outbox (key, line) VALUES (?, ?)")
           .run(key, this.mode === "listen" ? inbound.line : null);
+        if (marker.changes && this.inbox && source !== "reaction" && user === policy.ownerUser) {
+          this.inbox.enqueue({ key, channel, threadTs: source === "dm" ? null : inbound.threadTs, text });
+        }
         if (marker.changes && this.mode === "orchestrate" && source !== "reaction" && inbound.allowReply) {
           const threadTs = source === "dm" ? null : inbound.threadTs;
           const conversation = JSON.stringify([this.team, channel, threadTs]);
           this.jobs.enqueue({ key, conversation, channel, threadTs, ts, source, user, text });
         }
         // Recovery can discover this mention after the live socket has already skipped a follow-up.
-        if (this.mode === "orchestrate" && (source === "mention" || source === "thread-mention")
+        if (this.mode !== "listen" && (source === "mention" || source === "thread-mention")
           && ownsThread(channel, inbound.threadTs)) {
           return { channel, threadTs: inbound.threadTs, ts };
         }

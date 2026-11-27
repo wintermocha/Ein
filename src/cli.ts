@@ -11,6 +11,12 @@ const help = `Ein (아인) — Slack orchestration and project memory
   ${einCommand} check
   ${einCommand} replay < events.jsonl
   ${einCommand} listen
+  ${einCommand} slack connect [--pane PANE_ID | --session NAME]
+  ${einCommand} slack next [--pane PANE_ID | --session NAME]
+  ${einCommand} slack read RECEIPT
+  ${einCommand} slack reply RECEIPT TEXT|--stdin
+  ${einCommand} orchestration enable [codex|claude|omo] | disable | status
+  ${einCommand} task "task description"
   ${einCommand} orchestrate
   ${einCommand} project add --id ID --path DIRECTORY
   ${einCommand} folder bind --path DIRECTORY [--project ID]
@@ -22,7 +28,23 @@ const help = `Ein (아인) — Slack orchestration and project memory
 EIN_CONFIG selects the JSON config (default ~/.config/ein/config.json).
 EIN_HOME selects the Sniffer installation and memory store (default ~/.ein).
 listen writes INBOUND records to stdout and diagnostics to stderr.
+slack connect links Slack to an open agent. Enable orchestration in its directory to delegate from Slack or the CLI.
 orchestrate runs the configured agent sessions and sends replies to Slack.`;
+
+async function withShutdown(run: (controller: AbortController) => Promise<void>) {
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
+  try {
+    await run(controller);
+  } catch (error) {
+    if (!(controller.signal.aborted && error instanceof Error && error.name === "AbortError")) throw error;
+  } finally {
+    process.off("SIGTERM", stop);
+    process.off("SIGINT", stop);
+  }
+}
 
 async function main(args: string[]) {
   const [command] = args;
@@ -31,6 +53,14 @@ async function main(args: string[]) {
     return;
   }
   const configPath = process.env["EIN_CONFIG"] ?? "~/.config/ein/config.json";
+  if (command === "slack") {
+    const { slackSessionCommand } = await import("./slack-session");
+    return withShutdown(controller => slackSessionCommand(configPath, args.slice(1), controller));
+  }
+  if (command === "orchestration" || command === "task") {
+    const { orchestrationCommand, workerTask } = await import("./worker-task");
+    return command === "task" ? workerTask(args.slice(1)) : orchestrationCommand(args.slice(1));
+  }
   if (command === "__omo-bridge") {
     const { runOmoBridge } = await import("./herdr-omo");
     return runOmoBridge(args.slice(1));
@@ -60,20 +90,8 @@ async function main(args: string[]) {
     case "replay":
       return replay(config);
     case "listen":
-    case "orchestrate": {
-      const controller = new AbortController();
-      const stop = () => controller.abort();
-      process.once("SIGTERM", stop);
-      process.once("SIGINT", stop);
-      try {
-        await listen(config, controller, command);
-      } catch (error) {
-        if (!(controller.signal.aborted && error instanceof Error && error.name === "AbortError")) throw error;
-      } finally {
-        process.off("SIGTERM", stop);
-        process.off("SIGINT", stop);
-      }
-    }
+    case "orchestrate":
+      return withShutdown(controller => listen(config, controller, command));
   }
 }
 

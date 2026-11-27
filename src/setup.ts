@@ -6,6 +6,8 @@ import { setupIdentity, waitForSetupDm } from "./setup-slack";
 import { SetupStore } from "./setup-store";
 import { prepareSetupWorkspace, workspaceGuide } from "./setup-workspace";
 import { einCommand } from "./cli-invocation";
+import { hasMemoryEngine } from "./setup-folders";
+import { snifferEnvironment } from "./sniffer";
 import manifestJSON from "../examples/slack-manifest.json";
 
 const command = einCommand + " setup";
@@ -17,6 +19,7 @@ const tokenGuide = {
   bot: "OAuth & Permissions에서 워크스페이스에 앱을 설치한 뒤 Bot User OAuth Token을 복사하세요.",
 } as const;
 const usage = `${command}
+  --memory [폴더 ...]    도구의 기억과 대화를 검토해 가져오기 (Slack 연결 없이 사용 가능)
   --status         현재 단계와 다음 할 일 확인
   --manifest       새 Slack 앱에 붙여넣을 JSON 출력
   --app <App ID>   Slack 앱 선택
@@ -140,10 +143,12 @@ export async function setup(configPath: string, args: string[]): Promise<void> {
     if (store.configExists()) console.log(workspaceGuide(loadConfig(configPath).herdrWorkspace ?? "Ein"));
     return;
   }
-  const allowed = args.length === 0 || (args.length === 1 && (action === "--pair" || action === "--tokens"))
+  const memoryOnly = action === "--memory";
+  const allowed = args.length === 0 || memoryOnly || (args.length === 1 && (action === "--pair" || action === "--tokens"))
     || (args.length === 2 && (action === "--app" || action === "--confirm"));
   if (!allowed) throw new SetupError(`사용법은 ${command} --help로 확인하세요.`);
-  if (store.configExists()) { console.log(existing); return; }
+  if (!memoryOnly && store.configExists()) { console.log(existing + ` 기억 가져오기는 ${command} --memory로 열 수 있습니다.`); return; }
+  if (memoryOnly && (!hasSetupTerminal() || !hasMemoryEngine())) throw new SetupError("Ein과 Sniffer가 설치된 터미널에서 setup --memory를 실행하세요.");
   if (!action && !hasSetupTerminal()) { console.log(status(store)); return; }
 
   const unlock = store.lock();
@@ -152,6 +157,14 @@ export async function setup(configPath: string, args: string[]): Promise<void> {
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
   try {
+    const memoryHome = snifferEnvironment().EIN_HOME;
+    if (memoryOnly || (!action && hasMemoryEngine() && !store.read().appId && !store.memoryReviewed(memoryHome))) {
+      const { importMemory } = await import("./setup-memory");
+      const imported = await importMemory(args.slice(1), controller.signal);
+      if (imported || !memoryOnly) store.finishMemoryReview(memoryHome);
+      if (memoryOnly) return;
+      if (imported && !["y", "yes", "예"].includes((await askSetup("Slack 연결도 이어서 할까요? [y/N]", controller.signal)).toLowerCase())) return;
+    }
     if (store.configExists()) { console.log(existing); return; }
     if (!action) return await wizard(store, controller.signal);
     if (action === "--app" && value) selectApp(store, value);

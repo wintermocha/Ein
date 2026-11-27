@@ -13,6 +13,7 @@ const help = `Ein (아인) — Slack orchestration and project memory
   ${einCommand} listen
   ${einCommand} orchestrate
   ${einCommand} project add --id ID --path DIRECTORY
+  ${einCommand} folder bind --path DIRECTORY [--project ID]
   ${einCommand} memory search --query TEXT
   ${einCommand} run claude|codex|agy [-- NATIVE_ARGUMENTS]
   ${einCommand} delegate [--cwd DIRECTORY] [--project ID] [-- COMMAND ARG...]
@@ -35,7 +36,15 @@ async function main(args: string[]) {
     return runOmoBridge(args.slice(1));
   }
   if (command === "sniffer") return runSniffer(args.slice(1));
-  if (["memory", "project", "group", "run", "delegate"].includes(command)) return runSniffer(args);
+  if (["memory", "project", "group", "folder", "run", "delegate"].includes(command)) {
+    if (((command === "run" && ["claude", "codex", "agy"].includes(args[1] ?? "")) ||
+        (command === "memory" && args[1] === "save" && !args.some(arg => arg === "--project" || arg.startsWith("--project=") || arg === "--global"))) &&
+        process.stdin.isTTY && process.stderr.isTTY && !process.env.EIN_SNIFFER_EXPECT_PROJECT && !process.env.EIN_SNIFFER_ROLE && !process.env.EIN_SNIFFER_DELEGATION) {
+      const { hasMemoryEngine, connectFirstFolder } = await import("./setup-folders");
+      if (hasMemoryEngine()) await connectFirstFolder();
+    }
+    return runSniffer(args);
+  }
   if (command === "setup") {
     const { setup } = await import("./setup");
     return setup(configPath, args.slice(1));

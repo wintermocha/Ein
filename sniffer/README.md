@@ -42,8 +42,8 @@ ein memory read --id search-index-owner
 ### 프로젝트와 폴더를 연결하는 규칙
 
 - Slack 프로젝트는 `EIN_CONFIG`가 가리키는 파일에서 읽습니다. 기본값은 `~/.config/ein/config.json`입니다. 상대 프로젝트 경로는 이 파일이 있는 폴더를 기준으로 해석합니다. Slack 토큰 없이도 등록 정보를 사용할 수 있습니다.
-- Sniffer에 직접 등록한 폴더는 `$EIN_HOME/config.json`에 보관합니다. 같은 ID에 등록한 여러 작업 폴더는 기억을 공유합니다. 터미널에서는 실제 경로를 기준으로 가장 깊게 일치하는 등록 폴더를 선택합니다. 중첩 폴더가 별도 프로젝트로 등록돼 있으면 그 프로젝트의 기억을 사용합니다.
-- 검색 범위는 해당 프로젝트, 명시적으로 연결한 상위 그룹, `global`입니다. 형제 프로젝트 전용 기억은 검색에서 제외합니다. Slack 프로젝트를 처음 사용할 때는 필요한 Git 범위를 만들며, 이미 연결된 그룹이 있으면 그 계층을 사용합니다. 그룹에 공유할 기억은 `memory promote --dry-run`으로 대상 범위를 확인할 수 있습니다. [기억 형식과 범위](docs/STORAGE.md)
+- `ein folder bind --path "$PWD"`로 폴더 전용 기억을 시작합니다. 나중에 같은 명령에 `--project shop`을 붙여 프로젝트에 연결해도 기존 폴더 기억의 범위는 유지됩니다. 등록된 폴더에서는 하위 디렉터리도 같은 기억을 씁니다. 하위 폴더에 별도 기억을 두려면 `--exact`로 연결하세요. 대화형 `ein run`과 `ein memory save`도 첫 작업 폴더 연결을 안내합니다.
+- 기억을 저장할 때 `scope_id: folder:current`는 현재 폴더 전용, `scope_id: project:shop`은 shop에 연결된 모든 폴더에서 쓸 수 있는 기억입니다. 검색은 현재 폴더, 연결된 프로젝트와 상위 그룹, `global` 순으로 범위를 확인합니다. `memory promote --dry-run`으로 더 넓게 공유할 때의 대상을 확인할 수 있습니다. [기억 형식과 범위](docs/STORAGE.md)
 
 ## Slack에서 작업 이어가기
 

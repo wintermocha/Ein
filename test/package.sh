@@ -3,6 +3,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)
+bun_bin=$(command -v bun)
 case "$(uname -m)" in
   arm64) archive=ein-darwin-arm64 ;;
   x86_64) archive=ein-darwin-amd64 ;;
@@ -28,6 +29,7 @@ sniffer version > sniffer-version.json
 ein sniffer version > ein-sniffer-version.json
 cmp sniffer-version.json ein-sniffer-version.json
 ein --help
+"$bun_bin" "$root/test/fixtures/onboarding-memory.ts" "$EIN_HOME/bin/ein"
 ein setup --manifest > manifest.json
 ruby -rjson -e 'abort unless JSON.parse(File.read(ARGV[0])) == JSON.parse(File.read(ARGV[1]))' \
   manifest.json "$root/examples/slack-manifest.json"

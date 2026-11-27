@@ -130,6 +130,14 @@ export class SetupStore {
     this.publish(join(this.directory, "progress.json"), JSON.stringify(parsed.data));
   }
 
+  memoryReviewed(home: string): boolean {
+    return this.readPrivate("memory-onboarding") === home;
+  }
+
+  finishMemoryReview(home: string): void {
+    this.publish(join(this.directory, "memory-onboarding"), home);
+  }
+
   getToken(kind: TokenKind): string | undefined {
     const env = process.env[kind === "app" ? "EIN_APP_TOKEN" : "EIN_BOT_TOKEN"]?.trim();
     const raw = env || this.readPrivate(kind + "-token");

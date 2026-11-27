@@ -65,6 +65,7 @@ done
 if [ -d "$backup" ]; then printf 'Previous files saved in %s\n' "$backup"; fi
 printf 'Installed ein and sniffer in %s/bin\n' "$target"
 printf 'Add %s/bin to your shell PATH to run ein and sniffer.\n' "$target"
+printf '기존 도구의 기억을 가져오려면 "%s/bin/ein" setup --memory 를 실행하세요.\n' "$target"
 pending=
 if [ "$with_hooks" = true ]; then
   if ! EIN_HOME="$target" "$target/bin/sniffer" install-hooks; then

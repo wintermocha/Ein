@@ -21,6 +21,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   } else if (type === "prompt") {
     if (fixture.onPrompt === "exit") process.exit(0);
     if (fixture.onPrompt !== "refuse") appendFileSync(session + ".inbox", JSON.stringify(message) + "\\n");
+    for (const event of fixture.events) console.log(JSON.stringify(event));
     console.log(JSON.stringify({ type: "response", id, success: fixture.onPrompt !== "refuse" }));
   }
 }
@@ -31,8 +32,8 @@ let session: string;
 let socket: string;
 let child: ReturnType<typeof Bun.spawn> | undefined;
 
-function configure(state: Record<string, unknown> = {}, onPrompt = "accept") {
-  writeFileSync(session + ".fixture", JSON.stringify({ state, onPrompt }));
+function configure(state: Record<string, unknown> = {}, onPrompt = "accept", events: readonly object[] = []) {
+  writeFileSync(session + ".fixture", JSON.stringify({ state, onPrompt, events }));
 }
 
 function post(command: object) {
@@ -50,7 +51,7 @@ beforeEach(async () => {
   writeFileSync(runner, fakeRunner, { mode: 0o700 });
   configure();
   child = Bun.spawn([process.execPath, bridge, runner, session, socket], {
-    stdin: "ignore", stdout: "ignore", stderr: "inherit",
+    stdin: "ignore", stdout: Bun.file(join(folder, "pane.log")), stderr: "inherit",
   });
   const deadline = AbortSignal.timeout(2400);
   while (!existsSync(socket) || !existsSync(session + ".pid")) {
@@ -79,6 +80,29 @@ test("refused native RPC does not create a successful prompt receipt", async () 
   configure({}, "refuse");
   expect((await prompt("unaccepted")).ok).toBe(false);
   expect(existsSync(session + ".inbox")).toBe(false);
+});
+
+test("shows assistant progress and tool activity in the pane while the turn is still running", async () => {
+  const secret = "private-fixture-value";
+  const update = (type: string, delta: string) => ({ type: "message_update", assistantMessageEvent: { type, delta } });
+  configure({}, "accept", [
+    { type: "agent_start" },
+    { type: "message_start", message: { role: "user", content: secret } },
+    update("thinking_delta", secret),
+    update("toolcall_delta", secret),
+    update("text_delta", "조사 중 \u001b[32m확"),
+    update("text_delta", "인\u001b[0m xoxb-"),
+    update("text_delta", "123-test\n"),
+    { type: "tool_execution_start", toolName: "read", args: { path: secret } },
+    { type: "tool_execution_end", toolName: "read", isError: true, result: { content: secret } },
+  ]);
+  expect((await prompt(secret)).ok).toBe(true);
+
+  const pane = readFileSync(join(folder, "pane.log"), "utf8");
+  expect(pane).toContain("조사 중 확인 [REDACTED]");
+  expect(pane).toContain("read 실행");
+  expect(pane).toContain("read 실패");
+  expect(pane).not.toMatch(/private-fixture-value|xoxb-|\x1b/);
 });
 
 test("mismatched session UUID and replaced session file reject input", async () => {

@@ -200,6 +200,8 @@ func (a app) serve(args []string) error {
 	}
 }
 
+const delegationGuide = `For ordinary delegated agents that need Ein memory, run "$EIN_SNIFFER_BIN" delegate [--cwd DIR] [--project ID] -- COMMAND ARG... from the parent's bound workspace. Omit --project to inherit the parent project. Select another project only when the task explicitly assigns it. For a native spawn API, omit the command to get JSON and apply workingDirectory and env together after removing inherited EIN_SNIFFER_* settings and Slack tokens. Never pass the parent's worker endpoint, token file or memory tools to a child. If the host cannot apply the binding, give the child only the relevant context retrieved by the parent with direct Sniffer tools disabled. Where a child environment can be set, use EIN_SNIFFER_DELEGATION=none for this context-only mode. If the host cannot isolate a child from direct Sniffer access, keep the work in the parent. This applies to task agents; the private read-only Sniffer helper is managed by the host.`
+
 func (a app) launch(args []string) error {
 	if len(args) == 0 {
 		return errors.New("run requires claude, codex, or agy")
@@ -251,7 +253,7 @@ func (a app) launch(args []string) error {
 			return fmt.Errorf("install the Claude mod first: %w", err)
 		}
 		main := exec.Command(native, append([]string{"--plugin-dir", mod}, nativeArgs...)...)
-		main.Env = append(childEnv, "EIN_HOME="+a.paths.Home, "EIN_SNIFFER_BIN="+self)
+		main.Env = append(childEnv, "EIN_HOME="+a.paths.Home, "EIN_SNIFFER_BIN="+self, "EIN_SNIFFER_DELEGATE_GUIDE="+delegationGuide)
 		if raw := os.Getenv("EIN_SNIFFER_PROMPT_WAIT_MS"); raw != "" {
 			if n, e := strconv.Atoi(raw); e == nil && n >= 0 && n <= 5000 {
 				main.Env = append(main.Env, "EIN_SNIFFER_PROMPT_WAIT_MS="+raw)
@@ -384,7 +386,7 @@ func (a app) runMain(main *exec.Cmd) error {
 func cleanSnifferEnv(env []string) []string {
 	out := make([]string, 0, len(env))
 	for _, v := range env {
-		if !strings.HasPrefix(v, "EIN_SNIFFER_") {
+		if !strings.HasPrefix(v, "EIN_SNIFFER_") || v == delegationEnv+"=assigned" {
 			out = append(out, v)
 		}
 	}

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 import { createRunTurn } from "../src/agent-turn";
 import type { SessionRef } from "../src/runners";
 import { RecoveryIssue } from "../src/slack-api";
@@ -84,6 +85,40 @@ test("publishes a private result address, delivers one prompt and reuses the mat
   expect(await createRunTurn(runner, privateRoot, options)(request, signal, ignoreUpdate)).toEqual(reply);
   expect(ensured).toHaveLength(1);
   expect(prompts).toHaveLength(1);
+});
+
+test("a restored pane executes the current turn's memory command with its actual cwd and fresh binding", async () => {
+  const cwd = join(directory, "active task");
+  const home = join(directory, "new home's path");
+  const registry = join(directory, "new registry.json");
+  const binary = join(home, "bin", "sniffer");
+  mkdirSync(dirname(binary), { recursive: true });
+  mkdirSync(cwd);
+  writeFileSync(binary, [
+    "#!/bin/sh", 'pwd -P',
+    'printf "%s\\n" "$EIN_HOME" "$EIN_CONFIG" "$EIN_SNIFFER_EXPECT_PROJECT" "$EIN_SNIFFER_DELEGATION"',
+    'printf "%s\\n" "$EIN_SNIFFER_ENDPOINT:$EIN_SNIFFER_TOKEN_FILE:$EIN_SNIFFER_ROLE" "$@"',
+  ].join("\n") + "\n", { mode: 0o700 });
+  request = { ...request, session: { ...request.session, paneId: "pane-1",
+    nativeId: "3bb568c5-aa7c-43c6-8755-b425be1aedb4" }, memoryScope: {
+    kind: "project", workingDirectory: directory, projectRoot: directory, projectId: "current",
+    command: { executable: binary, env: { EIN_HOME: home, EIN_CONFIG: registry,
+      EIN_SNIFFER_EXPECT_PROJECT: "current", EIN_SNIFFER_DELEGATION: "assigned" } },
+  } };
+  let observation = "";
+  const resumed = runtime(frame => {
+    const { snifferArgv } = z.object({ snifferArgv: z.array(z.string()) }).parse(frame);
+    const child = Bun.spawnSync([...snifferArgv, "delegate", "--cwd", "child folder"], {
+      cwd, env: { EIN_HOME: "/old/home", EIN_CONFIG: "/old/config", EIN_SNIFFER_EXPECT_PROJECT: "old",
+        EIN_SNIFFER_DELEGATION: "none", EIN_SNIFFER_TOKEN_FILE: "old-token", EIN_SNIFFER_ENDPOINT: "old-run",
+        EIN_SNIFFER_ROLE: "memory-agent" },
+    });
+    observation = child.exitCode === 0 ? child.stdout.toString().trimEnd() : child.stderr.toString().trimEnd();
+    publish(frame.resultFile, body(frame));
+  });
+  expect(await submit(resumed)).toEqual(reply);
+  expect(observation.split("\n")).toEqual([realpathSync(cwd), home, registry, "current", "assigned", "::",
+    "delegate", "--cwd", "child folder"]);
 });
 
 test("each logical session has a separate grant and each turn has its own result address", async () => {

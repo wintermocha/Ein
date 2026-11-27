@@ -42,6 +42,17 @@ func Run(args []string, in io.Reader, out, errout io.Writer) error {
 	if len(args) == 0 {
 		return a.help()
 	}
+	policy := os.Getenv(delegationEnv)
+	if policy != "" && (policy != "assigned" || !config.ValidID(os.Getenv(expectedProjectEnv))) {
+		switch args[0] {
+		case "hook":
+			_, err = io.WriteString(out, "{}\n")
+			return err
+		case "version", "help", "-h", "--help":
+		default:
+			return errors.New("delegated session has no assigned memory project")
+		}
+	}
 	if os.Getenv("EIN_SNIFFER_ROLE") == "memory-agent" {
 		switch args[0] {
 		case "hook":
@@ -68,6 +79,8 @@ func Run(args []string, in io.Reader, out, errout io.Writer) error {
 		return a.installHooks()
 	case "group":
 		return a.group(args[1:])
+	case "delegate":
+		return a.delegate(args[1:])
 	case "run":
 		return a.launch(args[1:])
 	case "worker":
@@ -105,6 +118,7 @@ Usage: sniffer [--home DIRECTORY] COMMAND
   doctor --host claude|codex|agy [--executable PATH]
   install-hooks                     (merge Codex and agy user hooks for native recall)
   run claude|codex|agy [-- NATIVE_ARGUMENTS]
+  delegate [--cwd DIRECTORY] [--project ID] [-- COMMAND ARG...]
   hook claude|codex|agy [--event NAME] (adapter only)
   bridge begin|tool|complete|ack|cancel|reset|write (Claude mod JSON bridge)
   mcp --role reader|writer --project app (main-session explicit tools)
@@ -539,7 +553,11 @@ func (a app) hook(args []string) error {
 	if err = client.Post(context.Background(), "/v1/event", event, &response); err != nil {
 		return fail("recall unavailable")
 	}
-	b, err := host.Encode(h, event.Name, response.Context)
+	hookContext := response.Context
+	if (h == "codex" && event.Name == "SessionStart") || (h == "agy" && event.Name == "PreInvocation") {
+		hookContext = strings.TrimSpace(delegationGuide + "\n\n" + hookContext)
+	}
+	b, err := host.Encode(h, event.Name, hookContext)
 	if err != nil {
 		return fail("invalid adapter output")
 	}

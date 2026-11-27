@@ -37,6 +37,18 @@ sniffer project add --id folder-1 --path "$scratch/folder-1"
 sniffer project add --id folder-2 --path "$scratch/folder-2"
 fixture="$root/sniffer/examples/memories/projects/folder-1/m-local-port.md"
 (cd folder-1 && sniffer memory save --input "$fixture" --if-revision new --request-id smoke-save)
+mkdir folder-1/indexer
+(cd folder-1 && ein delegate --cwd indexer -- ein memory search --query PORT) > delegated-search.json
+ruby -rjson -e '
+  result = JSON.parse(File.read(ARGV.fetch(0)))
+  abort unless result.fetch("project_id") == "folder-1"
+  abort unless result.fetch("hits").map { |hit| hit.fetch("memory").fetch("id") } == ["m-local-port"]
+' delegated-search.json
+(cd folder-1 && ein delegate --project folder-2 --cwd ../folder-2 -- ein memory search --query PORT) > reassigned-search.json
+ruby -rjson -e 'result = JSON.parse(File.read(ARGV.fetch(0))); abort unless result.fetch("project_id") == "folder-2" && result.fetch("hits").empty?' reassigned-search.json
+if (cd folder-1 && EIN_SNIFFER_EXPECT_PROJECT=folder-1 EIN_SNIFFER_DELEGATION=assigned \
+    sniffer delegate --project folder-2 --cwd ../folder-2 -- touch "$scratch/unexpected-child"); then exit 1; fi
+test ! -e "$scratch/unexpected-child"
 sh "$archive/install.sh"
 test ! -e "$EIN_HOME/backups"
 codex_hooks="$CODEX_HOME/hooks.json"

@@ -155,7 +155,13 @@ func TestClaudeLauncherUsesNativeModWithoutWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake := filepath.Join(t.TempDir(), "fake-claude")
-	script := "#!/bin/sh\n[ \"$1\" = --plugin-dir ] || exit 20\n[ -z \"${EIN_SNIFFER_ENDPOINT:-}\" ] || exit 21\n[ -n \"$EIN_SNIFFER_BIN\" ] || exit 22\nprintf 'native-mod-ready\\n'\n"
+	script := `#!/bin/sh
+[ "$1" = --plugin-dir ] || exit 20
+[ -z "${EIN_SNIFFER_ENDPOINT:-}" ] || exit 21
+[ -n "$EIN_SNIFFER_BIN" ] || exit 22
+[ "$EIN_SNIFFER_DELEGATION" = assigned ] || exit 23
+printf '%s' "$EIN_SNIFFER_DELEGATE_GUIDE"
+`
 	if err := os.WriteFile(fake, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -163,8 +169,10 @@ func TestClaudeLauncherUsesNativeModWithoutWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(project)
+	t.Setenv(delegationEnv, "assigned")
+	t.Setenv(expectedProjectEnv, "app")
 	out, err := cli(t, p.Home, "run", "claude")
-	if err != nil || !strings.Contains(out, "native-mod-ready") {
+	if err != nil || out != delegationGuide {
 		t.Fatalf("%q %v", out, err)
 	}
 	entries, err := os.ReadDir(p.Run)

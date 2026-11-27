@@ -8,7 +8,8 @@ import type { Runner } from "./config";
 import { omoIdentity } from "./herdr-omo";
 import { findCodexSession } from "./herdr-codex-index";
 import { ensurePrivateDirectory } from "./private-directory";
-import { snifferEnvironment } from "./sniffer";
+import { snifferPaneEnvironment } from "./sniffer";
+import type { ProjectMemoryEnvironment } from "./turn-contract";
 import { standalone } from "./cli-invocation";
 
 export interface SessionRef {
@@ -103,7 +104,8 @@ export class HerdrRunner {
     return z.object({ snapshot }).parse(await this.call(["api", "snapshot"], signal, ref.id)).snapshot;
   }
 
-  private async createTab(label: string, ref: SessionRef, workspaceId: string | undefined, signal: AbortSignal) {
+  private async createTab(label: string, ref: SessionRef, workspaceId: string | undefined, signal: AbortSignal,
+    projectEnv?: ProjectMemoryEnvironment) {
     const { cwd } = ref;
     // A new headless server can have no workspace; concurrent first reservations share initialization.
     if (!workspaceId) {
@@ -116,8 +118,8 @@ export class HerdrRunner {
       workspaceId = await pending;
     }
     const args = ["tab", "create", "--workspace", workspaceId, "--cwd", cwd, "--label", label, "--no-focus"];
-    const memory = snifferEnvironment(this.env);
-    args.push("--env", "EIN_CONFIG=" + memory.EIN_CONFIG, "--env", "EIN_HOME=" + memory.EIN_HOME);
+    const memory = snifferPaneEnvironment(projectEnv, this.env);
+    for (const [name, value] of Object.entries(memory)) args.push("--env", name + "=" + value);
     // The native index and the pane must address the same Codex profile.
     if (ref.runner === "codex") args.push("--env", "CODEX_HOME=" + this.codexHome);
     const result = await this.call(args, signal, ref.id);
@@ -287,7 +289,8 @@ export class HerdrRunner {
     return undefined;
   }
 
-  async ensure(ref: SessionRef, signal: AbortSignal, onUpdate: (current: SessionRef) => void): Promise<SessionRef> {
+  async ensure(ref: SessionRef, signal: AbortSignal, onUpdate: (current: SessionRef) => void,
+    projectEnv?: ProjectMemoryEnvironment): Promise<SessionRef> {
     this.executable(ref.runner);
     const label = this.labelFor(ref.id);
     const layout = await this.layout(ref, signal);
@@ -304,7 +307,7 @@ export class HerdrRunner {
       throw new RunnerError("Reserved session moved; its pane could not be reconciled.");
     if (ref.paneId && ref.paneId !== found && !ref.nativeId)
       throw new RunnerError("Previous pane is missing and no verified native session ID is available.");
-    const paneId = found ?? await this.createTab(label, ref, layout.workspaces[0]?.workspace_id, signal);
+    const paneId = found ?? await this.createTab(label, ref, layout.workspaces[0]?.workspace_id, signal, projectEnv);
     const current = { ...ref, paneId };
     if (paneId !== ref.paneId) onUpdate(current);
     const existing = layout.agents.find(a => a.pane_id === paneId && a.agent);

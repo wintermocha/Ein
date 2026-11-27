@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ein Code Mode"
+  short_description: "여러 도구 조회를 묶고 대상별 결과와 실패를 집계합니다"
+
+policy:
+  allow_implicit_invocation: true

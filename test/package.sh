@@ -20,6 +20,7 @@ export PATH="$EIN_HOME/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 unset EIN_APP_TOKEN EIN_BOT_TOKEN EIN_SNIFFER_BIN
 cd "$scratch"
 tar -xzf "$root/dist/$archive.tar.gz"
+diff -r "$root/.agents/skills/codemode" "$archive/.agents/skills/codemode"
 sh "$archive/install.sh"
 test -f "$EIN_HOME/memory/store/.ein-store.json"
 test -f "$EIN_HOME/adapters/claude-mod/.claude-plugin/plugin.json"

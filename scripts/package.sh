@@ -25,7 +25,7 @@ bun build --compile --define EIN_STANDALONE=true --compile-exec-argv=--use-syste
 )
 cp -R sniffer/adapters "$bundle/"
 cp scripts/install.sh README.md "$bundle/"
-mkdir -p "$bundle/sniffer" "$bundle/.agents/skills/ein-setup" "$bundle/docs/assets" "$bundle/examples"
+mkdir -p "$bundle/sniffer" "$bundle/.agents/skills" "$bundle/docs/assets" "$bundle/examples"
 cp docs/*.md docs/*.html "$bundle/docs/"
 cp docs/assets/*.png "$bundle/docs/assets/"
 cp examples/config.json examples/events.jsonl examples/slack-manifest.json "$bundle/examples/"
@@ -33,7 +33,7 @@ mkdir -p "$bundle/sniffer/scripts"
 cp -R sniffer/docs sniffer/examples "$bundle/sniffer/"
 cp sniffer/README.md sniffer/PROVENANCE.md "$bundle/sniffer/"
 cp sniffer/scripts/demo.sh "$bundle/sniffer/scripts/"
-cp .agents/skills/ein-setup/SKILL.md "$bundle/.agents/skills/ein-setup/"
+cp -R .agents/skills/ein-setup .agents/skills/codemode "$bundle/.agents/skills/"
 cp sniffer/LICENSE sniffer/THIRD-PARTY-NOTICES.txt "$bundle/licenses/"
 find sniffer/vendor node_modules -type f \( -iname 'license' -o -iname 'license.*' -o -name NOTICE -o -name PATENTS \) \
   -exec sh -ec 'dest=$1; shift; for f do mkdir -p "$dest/$(dirname "$f")"; cp "$f" "$dest/$f"; done' sh "$bundle/licenses" {} +

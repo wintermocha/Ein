@@ -34,7 +34,7 @@ afterEach(async () => {
 function setup(...args: string[]) {
   const redirect = peer ? ["--preload", "./test/fixtures/sdk-slack-redirect.ts"] : [];
   const child = spawn(process.execPath, ["--no-env-file", ...redirect, "src/cli.ts", "setup", ...args], {
-    env: { HOME: root, EIN_CONFIG: config, ...(peer && {
+    env: { HOME: root, PATH: root, EIN_CONFIG: config, ...(peer && {
       NODE_EXTRA_CA_CERTS: peer.caFile, EIN_TEST_SLACK_API: peer.apiUrl, ...envTokens,
     }) },
     stdio: ["ignore", "pipe", "pipe"], timeout: 12_000, killSignal: "SIGKILL",
@@ -81,11 +81,15 @@ test("status and the pasteable manifest work before setup without creating local
 });
 
 test("setup preserves a hand-authored config and its directory", async () => {
-  const manual = JSON.stringify({ ...owner, watchChannels: ["CWATCH"], runner: "claude" }, null, 4);
+  const manual = JSON.stringify({ ...owner, watchChannels: ["CWATCH"], runner: "claude", herdrWorkspace: "My Ein" }, null, 4);
   writeFileSync(config, manual);
   for (const args of [[], ["--status"], ["--app", "AOTHER"], ["--pair"], ["--confirm", "UOTHER"]]) {
     const result = await setup(...args).result;
     if (args.length === 0 || args[0] === "--status") expect(result.code).toBe(0);
+    if (args[0] === "--status") {
+      expect(result.out).toContain("herdr session attach ein");
+      expect(result.out).toContain("My Ein");
+    }
     expect(result.out + result.err).not.toMatch(challengePattern);
     expect(readFileSync(config, "utf8")).toBe(manual);
     expect(readdirSync(configDir)).toEqual(["config.json"]);
@@ -164,7 +168,10 @@ test("setup resumes pairing and recovers an accepted confirmation from the owner
   expect(posts[1]).toMatchObject({ channel: owner.ownerDm, text: "연결됐어요" });
   const history = peer.calls.filter(call => call.method.startsWith("conversations."));
   expect(history.map(call => [call.method, call.params.get("channel")])).toEqual([["conversations.history", owner.ownerDm]]);
-  expect(loadConfig(config)).toMatchObject(owner);
+  expect(loadConfig(config)).toMatchObject({ ...owner, herdrWorkspace: "Ein-AEIN" });
+  expect(confirmation.out).toContain("Herdr를 설치");
+  expect(confirmation.out).toContain("herdr session attach ein");
+  expect(confirmation.out).toContain("Ein-AEIN");
   expect(statSync(config).mode & 0o777).toBe(0o600);
   const visible = second.output + confirmation.out + confirmation.err + readFileSync(config, "utf8");
   expect(visible).not.toContain(appToken);
@@ -181,7 +188,7 @@ test("the wizard keeps tokens private when confirmation is deferred to a later p
   await using terminal = new Bun.Terminal({ data(_term, data) { transcript += decoder.decode(data, { stream: true }); } });
   const child = Bun.spawn([process.execPath, "--no-env-file", "--preload", "./test/fixtures/sdk-slack-redirect.ts",
     "src/cli.ts", "setup"], { terminal, timeout: 12_000, killSignal: "SIGKILL",
-    env: { HOME: root, EIN_CONFIG: config, NODE_EXTRA_CA_CERTS: peer.caFile, EIN_TEST_SLACK_API: peer.apiUrl } });
+    env: { HOME: root, PATH: root, EIN_CONFIG: config, NODE_EXTRA_CA_CERTS: peer.caFile, EIN_TEST_SLACK_API: peer.apiUrl } });
   async function answer(prompt: string, value: string) {
     await waitFor(() => transcript.includes(prompt) || child.exitCode !== null, prompt);
     expect(transcript).toContain(prompt);

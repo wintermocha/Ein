@@ -19,7 +19,7 @@ import {writeFileSync} from "node:fs";
 const [,,first,second,...args]=process.argv.slice(2);
 const f=process.env.QA_DIR;
 let result;
-if(first==="api")result={snapshot:{workspaces:[{workspace_id:"w1"}],tabs:[],panes:[],agents:[]}};
+if(first==="api")result={snapshot:{workspaces:[{workspace_id:"w1",label:"Ein"}],tabs:[],panes:[],agents:[]}};
 else if(first==="tab"){writeFileSync(f+"/label",args[args.indexOf("--label")+1]);result={root_pane:{pane_id:"w1:p2"}}}
 else if(second==="process-info")result={process_info:{pane_id:"w1:p2",shell_pid:7,foreground_process_group_id:7,foreground_processes:[{pid:7,name:process.env.QA_OCCUPANT}]}};
 else {writeFileSync(f+"/wrong-launch","sent");process.exit(1)}

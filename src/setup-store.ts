@@ -140,14 +140,16 @@ export class SetupStore {
     this.publish(join(this.directory, kind + "-token"), checkedToken(kind, value) + "\n");
   }
 
-  finish(value: z.infer<typeof installation>): void {
+  finish(value: z.infer<typeof installation>): string {
     const parsed = installation.safeParse(value);
     if (!parsed.success) throw new SetupError("Invalid Slack installation identifiers.");
+    const herdrWorkspace = `Ein-${parsed.data.appId}`;
     this.publish(this.path, JSON.stringify({
-      ...parsed.data, watchChannels: [],
+      ...parsed.data, herdrWorkspace, watchChannels: [],
       appTokenFile: join(this.directory, "app-token"), botTokenFile: join(this.directory, "bot-token"),
     }, null, 2) + "\n", true);
     rmSync(join(this.directory, "progress.json"), { force: true });
+    return herdrWorkspace;
   }
 
   lock(): () => void {

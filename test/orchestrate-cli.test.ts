@@ -9,7 +9,7 @@ test("orchestrate recovers an ACKed mention and an accepted POST, then sends onl
   const project = join(dir, "project");
   const configFile = join(dir, "config.json");
   const config = {
-    team: "TTEST", appId: "AEIN", botUser: "UBOT", ownerUser: "UOWNER", watchChannels: ["CPROJECT"],
+    team: "TTEST", herdrWorkspace: "Ein-AEIN", appId: "AEIN", botUser: "UBOT", ownerUser: "UOWNER", watchChannels: ["CPROJECT"],
     stateFile: "state.sqlite", projects: { ein: { path: "project", channels: ["CPROJECT"] } },
   };
   const rows = (filename: string) => {

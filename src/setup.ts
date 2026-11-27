@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { SetupError } from "./config";
+import { loadConfig, SetupError } from "./config";
 import { askSetup, hasSetupTerminal } from "./setup-prompt";
 import { confirmSetupReply } from "./setup-reply";
 import { setupIdentity, waitForSetupDm } from "./setup-slack";
 import { SetupStore } from "./setup-store";
+import { prepareSetupWorkspace, workspaceGuide } from "./setup-workspace";
 import { einCommand } from "./cli-invocation";
 import manifestJSON from "../examples/slack-manifest.json";
 
@@ -100,8 +101,10 @@ async function confirm(store: SetupStore, user: string, signal: AbortSignal): Pr
     throw new SetupError(`DM 확인 후 봇 계정이 바뀌었습니다. 토큰을 확인하고 ${command} --pair를 다시 실행하세요.`);
   }
   await confirmSetupReply(store, { botToken, botUser: identity.botUser, ownerDm: owner.ownerDm, signal });
-  store.finish({ appId, ...owner });
+  const workspace = store.finish({ appId, ...owner });
   console.log(`Slack 연결 완료 · ${owner.team} · 소유자 ${user}\nDM에 답장을 보냈습니다. 이제 ${einCommand} listen으로 메시지를 받을 수 있습니다.`);
+  console.log(await prepareSetupWorkspace(workspace, signal));
+  console.log(workspaceGuide(workspace));
 }
 
 async function wizard(store: SetupStore, signal: AbortSignal): Promise<void> {
@@ -132,7 +135,11 @@ export async function setup(configPath: string, args: string[]): Promise<void> {
   if (action === "--help" && args.length === 1) { console.log(usage); return; }
   if (action === "--manifest" && args.length === 1) { process.stdout.write(manifest); return; }
   const store = new SetupStore(configPath);
-  if (action === "--status" && args.length === 1) { console.log(status(store)); return; }
+  if (action === "--status" && args.length === 1) {
+    console.log(status(store));
+    if (store.configExists()) console.log(workspaceGuide(loadConfig(configPath).herdrWorkspace ?? "Ein"));
+    return;
+  }
   const allowed = args.length === 0 || (args.length === 1 && (action === "--pair" || action === "--tokens"))
     || (args.length === 2 && (action === "--app" || action === "--confirm"));
   if (!allowed) throw new SetupError(`사용법은 ${command} --help로 확인하세요.`);

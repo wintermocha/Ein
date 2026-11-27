@@ -39,7 +39,7 @@ export function prepareOrchestration(options: ServiceOptions): Orchestration {
   const onIssue = (reason: string) => console.error(`Ein: ${reason}`);
   const dispatcher = new Dispatcher({
     config, queue, runner, neutralDirectory, onFatal, onIssue,
-    runTurn: createRunTurn(new HerdrRunner({ stateDir, installationId }), turnDir, {
+    runTurn: createRunTurn(new HerdrRunner({ stateDir, installationId, workspaceLabel: config.herdrWorkspace }), turnDir, {
       readThread: (window, signal) => fetchThreadHistory({
         ...window, botToken: options.botToken, blockedUsers: config.blockedUsers, signal,
       }),

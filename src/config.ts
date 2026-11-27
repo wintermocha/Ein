@@ -36,6 +36,7 @@ const configSchema = z.strictObject({
   botTokenFile: z.string().min(1).optional(),
   appTokenFile: z.string().min(1).optional(),
   stateFile: z.string().min(1).default("~/.local/state/ein/inbound.sqlite"),
+  herdrWorkspace: z.string().trim().min(1).regex(/^[^\x00-\x1f\x7f]+$/u).optional(),
   runner: runnerSchema.optional(),
   projects: projectsSchema.default({}),
 });

@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import type { Runner } from "./config";
+import { withWorkspaceLock } from "./herdr-workspace-lock";
+import { herdrEnvironment } from "./herdr-environment";
 import { omoIdentity } from "./herdr-omo";
 import { findCodexSession } from "./herdr-codex-index";
 import { ensurePrivateDirectory } from "./private-directory";
@@ -21,6 +23,11 @@ export interface SessionRef {
 }
 
 export class RunnerError extends Error {}
+export class AmbiguousWorkspaceError extends RunnerError {
+  constructor() {
+    super("Ein has an ambiguous workspace label. Rename the duplicate in herdr so the assigned workspace name is unique.");
+  }
+}
 const uuid = z.string().uuid();
 const pane = z.object({ pane_id: z.string(), tab_id: z.string(), cwd: z.string().nullish() });
 const agent = z.object({
@@ -30,8 +37,8 @@ const agent = z.object({
   agent_session: z.object({ agent: z.string(), kind: z.string(), value: z.string() }).nullish(),
 });
 const snapshot = z.object({
-  workspaces: z.array(z.object({ workspace_id: z.string() })),
-  tabs: z.array(z.object({ tab_id: z.string(), label: z.string() })),
+  workspaces: z.array(z.object({ workspace_id: z.string(), label: z.string() })),
+  tabs: z.array(z.object({ tab_id: z.string(), workspace_id: z.string(), label: z.string() })),
   panes: z.array(pane), agents: z.array(agent),
 });
 const digest = (input: string) => createHash("sha256").update(input).digest("hex");
@@ -39,6 +46,7 @@ const quote = (arg: string) => "'" + arg.replaceAll("'", "'\\''") + "'";
 const legacySessionId = /^hogu-[0-9a-f]{32}$/u;
 
 interface RunnerOptions {
+  workspaceLabel?: string | undefined;
   namespace?: string;
   installationId?: string;
   stateDir?: string;
@@ -46,21 +54,20 @@ interface RunnerOptions {
 }
 
 export class HerdrRunner {
+  private readonly workspaceLabel: string;
   private readonly namespace: string | undefined;
   private readonly installationId: string;
   private readonly stateDir: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly codexHome: string;
-  private readonly workspaces = new Map<string, Promise<string>>();
 
   constructor(options: RunnerOptions = {}) {
+    this.workspaceLabel = options.workspaceLabel ?? "Ein";
     this.namespace = options.namespace;
     this.installationId = options.installationId ?? "";
     this.stateDir = options.stateDir ?? join(homedir(), ".local", "state", "ein", "sessions");
-    const { HERDR_SOCKET_PATH, HERDR_ENV, HERDR_WORKSPACE_ID, HERDR_TAB_ID, HERDR_PANE_ID,
-      EIN_APP_TOKEN, EIN_BOT_TOKEN, HOGU_APP_TOKEN, HOGU_BOT_TOKEN, ...env } = options.env ?? process.env;
-    this.env = env;
-    this.codexHome = resolve(env.CODEX_HOME || join(env.HOME || homedir(), ".codex"));
+    this.env = herdrEnvironment(options.env);
+    this.codexHome = resolve(this.env.CODEX_HOME || join(this.env.HOME || homedir(), ".codex"));
   }
 
   private legacy(id: string) { return legacySessionId.test(id); }
@@ -78,9 +85,8 @@ export class HerdrRunner {
     return path;
   }
 
-  private async call(args: string[], signal: AbortSignal, sessionId: string) {
+  private async call(args: string[], signal: AbortSignal, namespace: string) {
     signal.throwIfAborted();
-    const namespace = this.namespaceFor(sessionId);
     const child = Bun.spawn([this.executable("herdr"), "--session", namespace, ...args], {
       env: this.env, stdin: "ignore", stdout: "pipe", stderr: "pipe",
       signal: AbortSignal.any([signal, AbortSignal.timeout(42_000)]),
@@ -99,28 +105,39 @@ export class HerdrRunner {
     catch { throw new RunnerError("Invalid response from herdr."); }
   }
 
-  private async layout(ref: SessionRef, signal: AbortSignal) {
-    return z.object({ snapshot }).parse(await this.call(["api", "snapshot"], signal, ref.id)).snapshot;
+  private async layout(namespace: string, signal: AbortSignal) {
+    return z.object({ snapshot }).parse(await this.call(["api", "snapshot"], signal, namespace)).snapshot;
   }
 
-  private async createTab(label: string, ref: SessionRef, workspaceId: string | undefined, signal: AbortSignal) {
+  private workspaceId(layout: z.infer<typeof snapshot>) {
+    const matches = layout.workspaces.filter(workspace => workspace.label === this.workspaceLabel);
+    if (matches.length > 1) throw new AmbiguousWorkspaceError();
+    return matches[0]?.workspace_id;
+  }
+
+  async ensureWorkspace(cwd: string, signal: AbortSignal, namespace = this.namespace ?? "ein"): Promise<string> {
+    const existing = this.workspaceId(await this.layout(namespace, signal));
+    return existing ?? this.createWorkspace(cwd, signal, namespace);
+  }
+
+  private async createWorkspace(cwd: string, signal: AbortSignal, namespace: string) {
+    return withWorkspaceLock(namespace, signal, async () => {
+      const id = this.workspaceId(await this.layout(namespace, signal));
+      if (id) return id;
+      const result = await this.call(["workspace", "create", "--label", this.workspaceLabel, "--cwd", cwd, "--no-focus"], signal, namespace);
+      return z.object({ workspace: z.object({ workspace_id: z.string() }) }).parse(result).workspace.workspace_id;
+    });
+  }
+
+  private async createTab(label: string, ref: SessionRef, workspace: string | undefined, signal: AbortSignal) {
     const { cwd } = ref;
-    // A new headless server can have no workspace; concurrent first reservations share initialization.
-    if (!workspaceId) {
-      const namespace = this.namespaceFor(ref.id);
-      const pending = this.workspaces.get(namespace) ?? this.call(
-        ["workspace", "create", "--label", "Ein", "--cwd", cwd, "--no-focus"], signal, ref.id)
-        .then(result => z.object({ workspace: z.object({ workspace_id: z.string() }) }).parse(result).workspace.workspace_id)
-        .finally(() => { this.workspaces.delete(namespace); });
-      this.workspaces.set(namespace, pending);
-      workspaceId = await pending;
-    }
+    const workspaceId = workspace ?? await this.createWorkspace(cwd, signal, this.namespaceFor(ref.id));
     const args = ["tab", "create", "--workspace", workspaceId, "--cwd", cwd, "--label", label, "--no-focus"];
     const memory = snifferEnvironment(this.env);
     args.push("--env", "EIN_CONFIG=" + memory.EIN_CONFIG, "--env", "EIN_HOME=" + memory.EIN_HOME);
     // The native index and the pane must address the same Codex profile.
     if (ref.runner === "codex") args.push("--env", "CODEX_HOME=" + this.codexHome);
-    const result = await this.call(args, signal, ref.id);
+    const result = await this.call(args, signal, this.namespaceFor(ref.id));
     return z.object({ root_pane: z.object({ pane_id: z.string() }) }).parse(result).root_pane.pane_id;
   }
 
@@ -144,7 +161,7 @@ export class HerdrRunner {
   }
 
   private async atShell(ref: SessionRef, paneId: string, signal: AbortSignal) {
-    const reply = await this.call(["pane", "process-info", "--pane", paneId], signal, ref.id);
+    const reply = await this.call(["pane", "process-info", "--pane", paneId], signal, this.namespaceFor(ref.id));
     const info = z.object({ process_info: z.object({
       pane_id: z.string(), shell_pid: z.number().nullish(), foreground_process_group_id: z.number().nullish(),
       foreground_processes: z.array(z.object({ pid: z.number(), name: z.string() })).optional(),
@@ -188,7 +205,7 @@ export class HerdrRunner {
       }
       const bridge = standalone ? [process.execPath, "__omo-bridge"] : [process.execPath, join(import.meta.dir, "herdr-omo.ts")];
       const command = [...bridge, executable, file, this.socket(ref)];
-      await this.call(["pane", "run", ref.paneId ?? "", "exec " + command.map(quote).join(" ")], signal, ref.id);
+      await this.call(["pane", "run", ref.paneId ?? "", "exec " + command.map(quote).join(" ")], signal, this.namespaceFor(ref.id));
     }
     const deadline = Date.now() + 30_000;
     const connectDeadline = start ? deadline : Date.now() + 1_500;
@@ -221,12 +238,12 @@ export class HerdrRunner {
         native.push(ref.runner === "claude" ? "--resume" : "resume", ref.nativeId);
       }
       if (ref.resultDir) native.push("--add-dir", ref.resultDir);
-      await this.call(native.length ? [...args, "--", ...native] : args, signal, ref.id);
+      await this.call(native.length ? [...args, "--", ...native] : args, signal, this.namespaceFor(ref.id));
     }
     const deadline = Date.now() + 30_000;
     const resumeDeadline = Date.now() + 2_500;
     for (;;) {
-      const result = await this.call(["agent", "get", ref.paneId ?? ""], signal, ref.id);
+      const result = await this.call(["agent", "get", ref.paneId ?? ""], signal, this.namespaceFor(ref.id));
       const live = z.object({ agent }).parse(result).agent;
       if (live.pane_id !== ref.paneId || live.agent !== ref.runner || live.name !== label)
         throw new RunnerError("Agent foreground identity changed.");
@@ -270,7 +287,7 @@ export class HerdrRunner {
     if (!existsSync(join(this.codexHome, "state_5.sqlite"))) return undefined;
     if (findCodexSession(this.codexHome, label, ref.cwd))
       throw new RunnerError("Codex reservation name already belongs to an indexed session.");
-    try { await this.call(["agent", "prompt", label, "/rename " + label], signal, ref.id); }
+    try { await this.call(["agent", "prompt", label, "/rename " + label], signal, this.namespaceFor(ref.id)); }
     catch (error) {
       signal.throwIfAborted();
       if (!(error instanceof RunnerError)) throw error;
@@ -290,7 +307,7 @@ export class HerdrRunner {
   async ensure(ref: SessionRef, signal: AbortSignal, onUpdate: (current: SessionRef) => void): Promise<SessionRef> {
     this.executable(ref.runner);
     const label = this.labelFor(ref.id);
-    const layout = await this.layout(ref, signal);
+    const layout = await this.layout(this.namespaceFor(ref.id), signal);
     const tabs = layout.tabs.filter(tab => tab.label === label);
     const matches = layout.panes.filter(p => tabs.some(t => t.tab_id === p.tab_id));
     if (tabs.length > 1 || (tabs.length && matches.length !== 1))
@@ -300,14 +317,18 @@ export class HerdrRunner {
       throw new RunnerError("Reserved pane working directory differs from its registered project.");
     const found = matched?.pane_id;
     if ((ref.paneId && ref.paneId !== found && layout.panes.some(p => p.pane_id === ref.paneId)) ||
-        (!found && layout.agents.some(a => a.name === label)))
+        layout.agents.some(a => a.name === label && a.pane_id !== found))
       throw new RunnerError("Reserved session moved; its pane could not be reconciled.");
     if (ref.paneId && ref.paneId !== found && !ref.nativeId)
       throw new RunnerError("Previous pane is missing and no verified native session ID is available.");
-    const paneId = found ?? await this.createTab(label, ref, layout.workspaces[0]?.workspace_id, signal);
+    const workspace = this.workspaceId(layout);
+    const foreign = matched && tabs[0]?.workspace_id !== workspace;
+    const existing = layout.agents.find(a => a.pane_id === found && a.agent);
+    if (foreign && (ref.paneId !== found || (!ref.nativeId && (ref.runner === "omo" || !existing))))
+      throw new RunnerError("Reservation outside the assigned workspace requires its recorded pane and session identity.");
+    const paneId = found ?? await this.createTab(label, ref, workspace, signal);
     const current = { ...ref, paneId };
     if (paneId !== ref.paneId) onUpdate(current);
-    const existing = layout.agents.find(a => a.pane_id === paneId && a.agent);
     // A persisted pane without a live agent may have run previously. Never restart it as a fresh session.
     let start = !found || (!existing && !ref.paneId);
     if (found && ref.runner !== "omo" && !existing && ref.nativeId) start = true;
@@ -340,6 +361,6 @@ export class HerdrRunner {
       throw new RunnerError("Prompt contains unsupported terminal controls.");
     // This CLI parses a standalone "--" as prompt text. Keep leading dashes out of option position.
     const input = text.startsWith("-") ? "Ein\n" + text : text;
-    await this.call(["agent", "prompt", this.labelFor(ref.id), input], signal, ref.id);
+    await this.call(["agent", "prompt", this.labelFor(ref.id), input], signal, this.namespaceFor(ref.id));
   }
 }

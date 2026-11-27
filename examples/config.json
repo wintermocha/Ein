@@ -11,6 +11,7 @@
   "botTokenFile": "~/.config/ein/bot-token",
   "stateFile": "~/.local/state/ein/inbound.sqlite",
   "runner": "omo",
+  "herdrWorkspace": "Ein-AEIN",
   "projects": {
     "ein": { "path": "..", "channels": ["CTEAM"] }
   }

@@ -26,6 +26,8 @@ Bun 1.4.2의 내장 `undici`에는 Slack SDK 3.2.0이 연결 상태 확인에 �
 2. **Basic Information → App-Level Tokens**에서 `connections:write` 앱 토큰을 만든다. **OAuth & Permissions**에서 워크스페이스에 앱을 설치하고 봇 토큰을 복사한다. 터미널의 숨김 입력란에 각각 붙여넣는다. 기존 `EIN_APP_TOKEN`과 `EIN_BOT_TOKEN`도 쓸 수 있다. 환경변수를 사용하면 이후 실행에도 같은 환경이 필요하다.
 3. 터미널에 표시된 링크에서 Ein에게 일회용 코드를 1:1 DM의 새 메시지로 보낸다. CLI에 표시된 사용자 ID가 본인인지 확인하고 승인한다. Ein이 같은 DM에 **“연결됐어요”**라고 답하면 로컬 설정이 완성된다.
 
+소유자를 확정하면 아인은 `Ein-<Slack 앱 ID>`를 herdr 워크스페이스 이름으로 설정에 저장한다. herdr가 설치돼 있으면 전용 서버 `ein`에서 워크스페이스를 준비한다. herdr를 나중에 설치해도 서버를 시작하고 첫 작업을 보내면 같은 이름의 워크스페이스가 생성된다.
+
 중단한 뒤 같은 `EIN_CONFIG`로 `bun run ein setup`을 다시 실행하면 앱 선택, 개별 토큰 입력, DM 수신까지 마친 지점에서 이어간다. DM을 보내기 전에 중단했다면 새 코드를 사용한다. `bun run ein setup --status`로 다음 단계를 확인하고, 잘못 입력한 토큰은 `bun run ein setup --tokens`로 교체한다. 기존 설정 파일이 있으면 setup이 그 위치를 새 설치에 사용하지 않는다.
 
 확인 답장을 보내는 도중 연결이 끊기면 같은 명령으로 재개한다. Ein이 해당 DM에서 이전 답장의 전송 기록을 확인하고 설정 저장을 마친다.
@@ -90,7 +92,7 @@ INBOUND <source> <channel> <threadTs> <ts> <user> "<JSON-escaped text>" [REPLY=y
 
 1. 설정 최상위의 `runner`에 설치한 실행기 하나를 넣는다. 이 실행기와 `herdr`가 아인을 실행하는 셸의 PATH에 있어야 한다.
 2. `projects`에 작업 디렉터리를 등록한다. 예제의 `projects.ein.path` 값 `..`는 **예제 파일의 상위 디렉터리**다. 설정을 복사했다면 실제 저장소 경로로 바꾼다. `channels`에는 이 프로젝트 전용 채널을 넣고, 그 채널에서 멘션도 받으려면 `watchChannels`에도 추가한다.
-3. 별도 터미널에서 Ein 전용 herdr 서버를 시작한다. 작업 pane은 서버의 환경을 상속하므로 Slack 토큰 환경변수는 서버에서 제외한다. 토큰은 다음 단계의 Ein 프로세스에 제공한다.
+3. 온보딩에서 시작한 herdr 서버가 실행 중이면 다음 단계로 넘어간다. 수동 설치나 재부팅 후 서버가 꺼져 있으면 별도 터미널에서 아래 명령으로 시작한다. 작업 탭은 서버의 환경을 상속하므로 Slack 토큰은 다음 단계의 Ein 프로세스에 제공한다.
 
 ```sh
 env -u EIN_BOT_TOKEN -u EIN_APP_TOKEN herdr --session ein server
@@ -103,6 +105,10 @@ env -u EIN_BOT_TOKEN -u EIN_APP_TOKEN herdr --session ein server
 ```sh
 bun run ein orchestrate
 ```
+
+진행 중인 작업을 보려면 다른 터미널에서 `herdr session attach ein`을 실행한다. `bun run ein setup --status`에 표시된 워크스페이스를 고르면 메인 세션과 Slack 대화·프로젝트 세션이 각각 탭으로 열린다. 새 탭이 생겨도 보고 있던 탭의 포커스는 유지된다. Codex와 Claude Code 탭에는 대화형 CLI가, OMO 탭에는 응답과 도구 실행 상황이 표시된다.
+
+수동 설정에서 워크스페이스 이름을 정할 때는 `herdrWorkspace`에 넣는다. 이 필드가 없는 기존 설정은 새 탭을 `Ein` 워크스페이스에 연다. 업그레이드 전에 이미 실행 중이던 세션은 기존 탭에서 이어간다.
 
 소유자가 공용 채널에서 봇을 멘션해 `project:ein 테스트 결과를 확인해 줘`라고 보내면 등록한 경로에서 세션이 열린다. 같은 스레드의 후속 질문은 기존 담당에게 간다. 전용 채널에는 프로젝트 지정을 생략할 수 있다. 응답은 원래 스레드로, 일반 1:1 DM은 최상위 DM으로 돌아온다. 프로젝트 단서가 충돌하거나 작업 위치가 모호하면 메인이 질문할 수 있다.
 

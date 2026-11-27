@@ -48,6 +48,8 @@ bun run ein setup
 
 안내에 따라 Slack 앱을 만들거나 기존 앱을 선택하고, 두 토큰을 입력한 뒤 Ein에게 확인 코드를 DM으로 보냅니다. 터미널에서 소유자 계정을 확인하면 Ein이 같은 DM에 **“연결됐어요”**라고 답합니다. 중간에 멈췄다면 같은 명령으로 이어갑니다.
 
+온보딩을 마치면 터미널에 이 앱의 herdr 워크스페이스 이름이 표시됩니다. 작업 중인 세션을 보려면 다른 터미널에서 `herdr session attach ein`을 실행한 뒤 안내받은 워크스페이스에서 작업 탭을 여세요. 이름은 `bun run ein setup --status`로 다시 확인할 수 있습니다.
+
 Codex에서 이 저장소를 열고 **“`$ein-setup`으로 Slack 연결해 줘”**라고 요청해도 됩니다. 에이전트가 한 단계씩 안내하고, 토큰은 내 터미널에서 비공개로 입력합니다. [온보딩 스킬](.agents/skills/ein-setup/SKILL.md)
 
 연결 후 `bun run ein listen`으로 DM을 받을 수 있습니다. 채널 멘션이나 에이전트 답변을 사용하려면 운영 가이드에서 추가 설정을 진행합니다. [Slack CLI 운영 가이드](docs/slack-cli.md) · [설정 예제](examples/config.json)

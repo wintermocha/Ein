@@ -9,7 +9,7 @@ if (rawArgs[0] !== "--session" || rawArgs[1] !== "ein") throw Error("Expected de
 const args = rawArgs.slice(2);
 const option = (key: string) => args[args.indexOf(key) + 1];
 const command = args.slice(0, 2).join(" ");
-const workspace = { workspace_id: "w1", label: "Ein" };
+const workspace = { workspace_id: "w1", label: "Ein-AEIN" };
 const tab = { tab_id: "w1:t1", workspace_id: "w1", label: "" };
 const pane = { pane_id: "w1:p1", tab_id: tab.tab_id, workspace_id: "w1", cwd: "" };
 const agent = {
@@ -17,7 +17,7 @@ const agent = {
   interactive_ready: true, agent_session: { agent: "codex", kind: "id", value: "832b2344-28ce-4ad5-b12a-c8242e75581c" },
 };
 const snapshot: { workspaces: (typeof workspace)[]; tabs: (typeof tab)[]; panes: (typeof pane)[]; agents: (typeof agent)[] } =
-  existsSync(state) ? JSON.parse(readFileSync(state, "utf8")) : { workspaces: [workspace], tabs: [], panes: [], agents: [] };
+  existsSync(state) ? JSON.parse(readFileSync(state, "utf8")) : { workspaces: [{ workspace_id: "w0", label: "Personal" }, workspace], tabs: [], panes: [], agents: [] };
 
 function log(value: unknown) {
   appendFileSync(join(directory, "herdr.jsonl"), JSON.stringify(value) + "\n");
@@ -29,7 +29,7 @@ switch (command) {
   case "tab create": {
     const label = option("--label");
     const cwd = option("--cwd");
-    if (!label || !cwd || snapshot.tabs.length) throw Error("Unexpected tab creation");
+    if (option("--workspace") !== workspace.workspace_id || !label || !cwd || snapshot.tabs.length) throw Error("Unexpected tab creation");
     const newTab = { ...tab, label };
     const newPane = { ...pane, cwd };
     snapshot.tabs.push(newTab);

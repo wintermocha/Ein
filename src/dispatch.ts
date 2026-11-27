@@ -1,12 +1,12 @@
 import type { Config, Runner } from "./config";
 import type { Job, JobQueue } from "./job-queue";
 import { DispatchHold, SessionRouting, nonOwnerReply, role, savedTarget, type Target } from "./session-routing";
-import { RunnerError, type SessionRef } from "./runners";
+import { AmbiguousWorkspaceError, RunnerError, type SessionRef } from "./runners";
 import { turnResultSchema, type RunTurn } from "./turn-contract";
 import { TurnError } from "./turn-files";
 
 function holdReason(error: unknown, runner: Runner): string {
-  if (error instanceof DispatchHold) return error.message;
+  if (error instanceof DispatchHold || error instanceof AmbiguousWorkspaceError) return error.message;
   if (error instanceof RunnerError) {
     for (const executable of [runner, "herdr"]) {
       if (error.message === `Missing executable on PATH: ${executable}.`) {

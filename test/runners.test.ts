@@ -9,7 +9,7 @@ import { HerdrRunner, type SessionRef } from "../src/runners";
 // Only the herdr process boundary is simulated. Check the pane, native launch and accepted
 // input as a CLI consumer sees them, including a pane disappearing between deliveries.
 const herdr = String.raw`
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 const state = process.env.FAKE_STATE;
@@ -23,16 +23,22 @@ const command = group + " " + action;
 let result;
 switch (command) {
   case "api snapshot":
-    result = { snapshot: { workspaces: data.emptyWorkspace ? [] : [{ workspace_id: "w1" }], tabs: data.tabs, panes: data.panes, agents: data.agents } };
+    if (process.env.PEER && !existsSync(state + "." + process.env.PEER)) {
+      writeFileSync(state + "." + process.env.PEER, "");
+      const other = process.env.PEER === "a" ? "b" : "a";
+      while (!existsSync(state + "." + other)) await Bun.sleep(10);
+    }
+    result = { snapshot: { workspaces: data.workspaces, tabs: data.tabs, panes: data.panes, agents: data.agents } };
     break;
   case "workspace create":
-    data.workspaceLabels.push(option("--label"));
-    result = { workspace: { workspace_id: "w1" } };
+    appendFileSync(state + ".creates", option("--label") + "\n");
+    data.workspaces.push({ workspace_id: "created-" + data.workspaces.length, label: option("--label") });
+    result = { workspace: data.workspaces.at(-1) };
     break;
   case "tab create": {
-    if (option("--workspace") !== "w1") throw Error("Wrong workspace");
+    if (!data.workspaces.some(w => w.workspace_id === option("--workspace"))) throw Error("Missing workspace");
     const number = ++data.sequence;
-    const tab = { tab_id: "t" + number, label: option("--label") };
+    const tab = { tab_id: "t" + number, workspace_id: option("--workspace"), label: option("--label") };
     const pane = { pane_id: "p" + number, tab_id: tab.tab_id, cwd: option("--cwd") };
     data.tabs.push(tab); data.panes.push(pane);
     result = { root_pane: pane, tab };
@@ -84,18 +90,18 @@ switch (command) {
     break;
   default: throw Error("Unexpected command: " + command);
 }
-writeFileSync(state, JSON.stringify(data));
+if (command !== "api snapshot") writeFileSync(state, JSON.stringify(data));
 if (result) console.log(JSON.stringify({ result }));
 `;
 
 type Data = {
-  sequence: number; tabs: {tab_id: string; label: string}[];
+  sequence: number; tabs: {tab_id: string; label: string; workspace_id: string}[];
   panes: {pane_id: string; tab_id: string; cwd: string}[];
   agents: {pane_id: string; name: string; agent: string; agent_status?: string;
     interactive_ready?: boolean; reportsNativeId?: boolean}[];
   launches: {kind: string; target: string; nativeArgs: string[]}[];
   replaceAfterGet?: boolean; renameNativeId?: string; suppressResumeReport?: boolean;
-  emptyWorkspace?: boolean; workspaceLabels: string[];
+  workspaces: { workspace_id: string; label: string }[];
   nativeId: string | null; busyReads: number; status: string; messages: string[][]; paneRuns: string[];
 };
 let dir: string;
@@ -105,9 +111,9 @@ const signal = new AbortController().signal;
 const nop = () => {};
 function load(): Data { return JSON.parse(readFileSync(dataFile, "utf8")); }
 function patch(fields: Partial<Data>) { writeFileSync(dataFile, JSON.stringify({ ...load(), ...fields })); }
-type AdapterOptions = { readonly namespace?: string; readonly expectedNamespace?: string };
+type AdapterOptions = { readonly namespace?: string; readonly expectedNamespace?: string; readonly workspaceLabel?: string };
 function adapter(installationId = "installation-a", options: AdapterOptions = { namespace: "runner-test" }) {
-  const runnerOptions = { installationId, stateDir: dir, env: {
+  const runnerOptions = { workspaceLabel: options.workspaceLabel, installationId, stateDir: dir, env: {
     PATH: dir, FAKE_STATE: dataFile, CODEX_HOME: join(dir, "codex-profile"),
     EXPECT_NAMESPACE: options.expectedNamespace ?? options.namespace ?? "ein",
     HERDR_SOCKET_PATH: "/someone-elses-session", EIN_APP_TOKEN: "receiver-only",
@@ -128,7 +134,7 @@ beforeEach(() => {
   mkdirSync(join(dir, "turn results"));
   dataFile = join(dir, "state.json");
   writeFileSync(dataFile, JSON.stringify({ sequence: 0, tabs: [], panes: [], agents: [], launches: [],
-    nativeId, busyReads: 0, status: "idle", messages: [], workspaceLabels: [], paneRuns: [] } satisfies Data));
+    nativeId, busyReads: 0, status: "idle", messages: [], workspaces: [{ workspace_id: "w1", label: "Ein" }], paneRuns: [] } satisfies Data));
   writeFileSync(join(dir, "herdr"), "#!" + process.execPath + "\n" + herdr, { mode: 0o700 });
   for (const runner of ["codex", "claude", "omo"])
     writeFileSync(join(dir, runner), "#!/bin/sh\nexit 98", { mode: 0o700 });
@@ -136,12 +142,34 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 test("a new reservation uses the Ein server, workspace and label without inherited Slack tokens", async () => {
-  patch({ emptyWorkspace: true });
+  patch({ workspaces: [{ workspace_id: "unrelated", label: "Ein-other" }] });
 
   await adapter("installation-a", {}).ensure(reservation(), signal, nop);
 
-  expect(load().workspaceLabels).toEqual(["Ein"]);
+  expect(load().workspaces.map(w => w.label)).toEqual(["Ein-other", "Ein"]);
+  expect(load().tabs[0]?.workspace_id).toBe("created-1");
   expect(load().tabs[0]?.label).toMatch(/^ein-[0-9a-f]{26}$/u);
+});
+
+test("concurrent setup and reservations reuse exactly one named workspace and reject duplicate labels", async () => {
+  const client = adapter("installation-a", { workspaceLabel: "Ein-A" });
+  const program = `import { HerdrRunner } from "./src/runners";
+    console.log(await new HerdrRunner({ workspaceLabel: "Ein-A" }).ensureWorkspace(process.cwd(), AbortSignal.timeout(4000)));`;
+  const ids = await Promise.all(["a", "b"].map(async peer => {
+    const child = Bun.spawn([process.execPath, "-e", program], {
+      env: { PATH: dir, FAKE_STATE: dataFile, EXPECT_NAMESPACE: "ein", PEER: peer },
+      stdout: "pipe", stderr: "inherit", timeout: 4500,
+    });
+    expect(await child.exited).toBe(0);
+    return (await new Response(child.stdout).text()).trim();
+  }));
+  expect(ids).toEqual(["created-1", "created-1"]);
+  expect(readFileSync(dataFile + ".creates", "utf8")).toBe("Ein-A\n");
+  await client.ensure(reservation(), signal, nop);
+  expect(load().tabs.map(tab => tab.workspace_id)).toEqual(["created-1"]);
+  patch({ workspaces: [...load().workspaces, { workspace_id: "duplicate", label: "Ein-A" }] });
+  await expect(client.ensure({ ...reservation(), id: "next" }, signal, nop)).rejects.toThrow("ambiguous workspace");
+  expect(load().tabs).toHaveLength(1);
 });
 
 test("an exact persisted legacy ID resolves its prior namespace and label", async () => {
@@ -150,7 +178,8 @@ test("an exact persisted legacy ID resolves its prior namespace and label", asyn
     .update(JSON.stringify([dir, "installation-a", id])).digest("hex").slice(0, 26);
   const ref = { ...reservation(), id, paneId: "p-old", nativeId };
   patch({
-    tabs: [{ tab_id: "t-old", label }],
+    workspaces: [{ workspace_id: "old", label: "Personal" }],
+    tabs: [{ tab_id: "t-old", workspace_id: "old", label }],
     panes: [{ pane_id: "p-old", tab_id: "t-old", cwd: ref.cwd }],
     agents: [{ pane_id: "p-old", name: label, agent: "codex", agent_status: "idle",
       interactive_ready: true, reportsNativeId: true }],
@@ -159,7 +188,15 @@ test("an exact persisted legacy ID resolves its prior namespace and label", asyn
   const resumed = await adapter("installation-a", { expectedNamespace: "hogu" }).ensure(ref, signal, nop);
 
   expect(resumed).toEqual(ref);
+  const client = adapter("installation-a", { expectedNamespace: "hogu" });
+  await client.prompt(resumed, "legacy follow-up", signal);
+  expect(load().messages).toEqual([["p-old", "legacy follow-up"]]);
   expect(load().launches).toEqual([]);
+  patch({ agents: [] });
+  await expect(client.ensure({ ...reservation(), id, nativeId }, signal, nop)).rejects.toThrow("outside");
+  await expect(client.ensure({ ...reservation(), id, paneId: "p-old" }, signal, nop)).rejects.toThrow("outside");
+  expect(await client.ensure(ref, signal, nop)).toEqual(ref);
+  expect(load().launches).toEqual([{ kind: "codex", target: "p-old", nativeArgs: ["resume", nativeId, "--add-dir", ref.resultDir] }]);
 });
 
 test.each([

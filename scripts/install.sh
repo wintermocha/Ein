@@ -17,6 +17,10 @@ if [ ! -f SHA256SUMS ]; then
   exit 1
 fi
 shasum -a 256 -c SHA256SUMS >/dev/null
+if [ "${EIN_UPDATE_TO+x}" = x ] && ! printf '%s\n' "$EIN_UPDATE_TO" | cmp -s - "$bundle/release-tag"; then
+  echo 'The package release tag does not match the requested update.' >&2
+  exit 1
+fi
 case "$(uname -s)-$(uname -m)-$(cat platform)" in
   Darwin-arm64-darwin-arm64|Darwin-x86_64-darwin-amd64) ;;
   *) echo "This release targets $(cat platform). Choose a release for this Mac." >&2; exit 1 ;;
@@ -28,6 +32,19 @@ if ! shlock -p "$$" -f "$target/.install.lock"; then
   exit 1
 fi
 trap 'rm -f "$target/.install.lock"' EXIT
+if [ "${EIN_UPDATE_FROM+x}" = x ]; then
+  installed=unversioned
+  if [ -f "$target/release-tag" ]; then
+    installed=$(cat "$target/release-tag")
+  elif [ -e "$target/release-tag" ] || [ -L "$target/release-tag" ]; then
+    echo 'Cannot read the installed release tag.' >&2
+    exit 1
+  fi
+  if [ "$installed" != "$EIN_UPDATE_FROM" ]; then
+    echo 'The installed release changed. Run ein update again.' >&2
+    exit 1
+  fi
+fi
 stage=$(mktemp -d "$target/.install.XXXXXXXX")
 backup="$target/backups/${stage##*.}"
 pending=
@@ -48,11 +65,12 @@ restore_on_error() {
 }
 trap restore_on_error EXIT
 trap 'exit 1' HUP INT TERM
-cp -R "$bundle/bin" "$bundle/adapters" "$stage/"
+cp -R "$bundle/bin" "$bundle/adapters" "$bundle/release-tag" "$stage/"
 EIN_HOME="$target" "$stage/bin/sniffer" memory init
-for rel in bin/ein bin/sniffer adapters/claude-mod adapters/codex adapters/antigravity; do
+for rel in bin/ein bin/sniffer adapters/claude-mod adapters/codex adapters/antigravity release-tag; do
   current="$target/$rel"
-  if [ ! -L "$current" ] && [ -x "$current" ] && diff -qr "$stage/$rel" "$current" >/dev/null; then
+  if [ -e "$current" ] && [ ! -L "$current" ] && { [ "$rel" = release-tag ] || [ -x "$current" ]; } &&
+      diff -qr "$stage/$rel" "$current" >/dev/null; then
     continue
   fi
   pending="$rel $pending"

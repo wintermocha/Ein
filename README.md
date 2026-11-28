@@ -24,13 +24,15 @@
 
 ## Mac에 설치하기
 
-**설치하거나 업데이트하려면** Mac 터미널에서 아래 한 줄을 실행하세요. 최신 릴리스의 Apple Silicon 또는 Intel 패키지를 자동으로 골라 SHA-256을 확인하고 `~/.ein`에 설치합니다. 로컬 Git이 필요하며, Bun과 Go는 따로 설치할 필요가 없습니다.
+**처음 설치할 때는** Mac 터미널에서 아래 한 줄을 실행하세요. 최신 릴리스의 Apple Silicon 또는 Intel 패키지를 자동으로 골라 SHA-256을 확인하고 `~/.ein`에 설치합니다. 로컬 Git이 필요하며, Bun과 Go는 따로 설치할 필요가 없습니다.
 
 ```sh
 curl -fsSL https://github.com/wintermocha/Ein/releases/latest/download/install-release.sh | sh
 ```
 
 `~/.ein/bin/ein --help`로 설치를 확인하고, Slack에 연결하려면 `~/.ein/bin/ein setup`을 실행하세요. 어느 폴더에서든 `ein`으로 부르려면 `~/.zshrc`에 `export PATH="$HOME/.ein/bin:$PATH"`를 추가하고 새 터미널을 여세요. Codex·Antigravity CLI 자동 회상 hook도 등록하려면 위 명령 끝의 `| sh`를 `| sh -s -- --with-hooks`로 바꾸세요.
+
+**업데이트할 때는 `ein update`를 실행하세요.** 새 릴리스가 있으면 패키지를 검증해 설치하고, 이미 최신이면 현재 버전을 출력합니다. `EIN_HOME`을 지정해 설치했다면 업데이트할 때도 같은 값을 사용하세요. `update` 명령이 없는 구버전은 위 설치 명령을 한 번 실행하면 됩니다.
 
 **수동 설치**는 [GitHub Releases](https://github.com/wintermocha/Ein/releases)에서 원하는 버전의 `ein-darwin-arm64.tar.gz`(Apple Silicon) 또는 `ein-darwin-amd64.tar.gz`(Intel)를 내려받아 압축을 풀고, 그 폴더에서 `sh install.sh`를 실행하세요. `main`이 갱신될 때마다 GitHub Actions가 두 Mac용 패키지를 빌드하고 각각 설치 테스트를 통과하면 릴리스를 게시합니다.
 

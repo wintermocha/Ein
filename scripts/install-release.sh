@@ -2,12 +2,19 @@
 set -eu
 
 install_release() {
+  tag='@RELEASE_TAG@'
   case "$#:${1:-}" in
     0:|1:--with-hooks) ;;
+    1:--update)
+      if [ -z "${EIN_UPDATE_FROM:-}" ] || [ "${EIN_UPDATE_TO:-}" != "$tag" ]; then
+        echo 'The installer does not match the requested Ein update.' >&2
+        exit 1
+      fi
+      set --
+      ;;
     *) echo 'Usage: sh install-release.sh [--with-hooks]' >&2; exit 1 ;;
   esac
 
-  tag='@RELEASE_TAG@'
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) platform=darwin-arm64; checksum='@SHA256_ARM64@' ;;
     Darwin-x86_64) platform=darwin-amd64; checksum='@SHA256_AMD64@' ;;

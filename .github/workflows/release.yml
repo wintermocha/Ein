@@ -17,6 +17,8 @@ jobs:
           - runner: macos-15-intel
             arch: amd64
     runs-on: ${{ matrix.runner }}
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,6 +30,12 @@ jobs:
         with:
           go-version-file: sniffer/go.mod
           cache: false
+      - id: release
+        shell: bash
+        run: |
+          tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "EIN_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
       - run: bun run package
       - run: sh test/package.sh
       - run: sh test/install-release.sh
@@ -58,10 +66,10 @@ jobs:
       - name: Publish tested packages and installer
         env:
           GH_TOKEN: ${{ github.token }}
+          tag: ${{ needs.build.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
           arm=dist/ein-darwin-arm64.tar.gz
           intel=dist/ein-darwin-amd64.tar.gz
           arm_sum=$(sha256sum "$arm")

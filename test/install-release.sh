@@ -51,6 +51,12 @@ test "$(cat "$HOME/invocation")" = "ein-darwin-amd64 1 --with-hooks"
 test -z "$(ls -A "$TMPDIR")"
 rm "$HOME/invocation"
 
+if EIN_UPDATE_FROM=source EIN_UPDATE_TO=v1.2.4 TEST_ARCH=arm64 sh installer.sh --update; then exit 1; fi
+test ! -e "$HOME/invocation"
+EIN_UPDATE_FROM=source EIN_UPDATE_TO=v1.2.3 TEST_ARCH=arm64 sh installer.sh --update
+test "$(cat "$HOME/invocation")" = "ein-darwin-arm64 0 "
+rm "$HOME/invocation"
+
 printf 'corrupted' >> ein-darwin-arm64.tar.gz
 if TEST_ARCH=arm64 sh -s < installer.sh; then exit 1; fi
 test ! -e "$HOME/invocation"

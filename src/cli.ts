@@ -7,6 +7,7 @@ import { einCommand } from "./cli-invocation";
 import { runSniffer } from "./sniffer";
 
 const help = `Ein (아인) — Slack orchestration and project memory
+  ${einCommand} update
   ${einCommand} setup [--help]
   ${einCommand} check
   ${einCommand} replay < events.jsonl
@@ -53,6 +54,10 @@ async function main(args: string[]) {
     return;
   }
   const configPath = process.env["EIN_CONFIG"] ?? "~/.config/ein/config.json";
+  if (command === "update") {
+    const { update } = await import("./update");
+    return update(args.slice(1));
+  }
   if (command === "slack") {
     const { slackSessionCommand } = await import("./slack-session");
     return withShutdown(controller => slackSessionCommand(configPath, args.slice(1), controller));

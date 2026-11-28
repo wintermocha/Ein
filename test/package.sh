@@ -20,8 +20,15 @@ export PATH="$EIN_HOME/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 unset EIN_APP_TOKEN EIN_BOT_TOKEN EIN_SNIFFER_BIN
 cd "$scratch"
 tar -xzf "$root/dist/$archive.tar.gz"
+grep -q '  ./release-tag$' "$archive/SHA256SUMS"
+printf '%s\n' "${EIN_RELEASE_TAG:-source}" | cmp - "$archive/release-tag"
 diff -r "$root/.agents/skills/codemode" "$archive/.agents/skills/codemode"
-sh "$archive/install.sh"
+if EIN_UPDATE_FROM=unversioned EIN_UPDATE_TO=wrong-release sh "$archive/install.sh"; then exit 1; fi
+test ! -e "$EIN_HOME"
+EIN_UPDATE_FROM=unversioned EIN_UPDATE_TO="$(cat "$archive/release-tag")" sh "$archive/install.sh"
+cmp "$archive/release-tag" "$EIN_HOME/release-tag"
+if EIN_UPDATE_FROM=unversioned sh "$archive/install.sh"; then exit 1; fi
+test ! -e "$EIN_HOME/.install.lock"
 test -f "$EIN_HOME/memory/store/.ein-store.json"
 test -f "$EIN_HOME/adapters/claude-mod/.claude-plugin/plugin.json"
 test -f "$EIN_HOME/adapters/antigravity/sniffer-memory-agent.md"
@@ -102,19 +109,23 @@ cmp "$archive/adapters/codex/hooks.example.json" "$EIN_HOME/adapters/codex/hooks
 # Force a failed rename after the executable has already been upgraded.
 printf '#!/bin/sh\necho previous-version\n' > previous-ein
 cp previous-ein "$EIN_HOME/bin/ein"
+printf '%s\n' main-1-1234567 > previous-tag
+cp previous-tag "$EIN_HOME/release-tag"
 printf 'modified hook\n' >> "$EIN_HOME/adapters/codex/hooks.example.json"
 mkdir fail-rename
 cat > fail-rename/mv <<'WRAPPER'
 #!/bin/sh
-case "$1" in */.install.*/adapters/codex) exit 1 ;; esac
+case "$1" in */.install.*/release-tag) exit 1 ;; esac
 exec /bin/mv "$@"
 WRAPPER
 chmod +x fail-rename/mv
-if PATH="$scratch/fail-rename:$PATH" sh "$archive/install.sh"; then exit 1; fi
+if EIN_UPDATE_FROM="$(cat previous-tag)" EIN_UPDATE_TO="$(cat "$archive/release-tag")" \
+    PATH="$scratch/fail-rename:$PATH" sh "$archive/install.sh"; then exit 1; fi
+cmp previous-tag "$EIN_HOME/release-tag"
 cmp previous-ein "$EIN_HOME/bin/ein"
 grep -q 'modified hook' "$EIN_HOME/adapters/codex/hooks.example.json"
 test ! -e "$EIN_HOME/.install.lock"
-printf 'tamper test\n' >> "$archive/platform"
+printf 'tamper test\n' >> "$archive/release-tag"
 if EIN_HOME="$scratch/rejected" sh "$archive/install.sh"; then exit 1; fi
 test ! -e "$scratch/rejected"
 printf '%s\n' 'PASS: install, memory initialization, standalone CLIs, compiled setup, optional idempotent host hooks, project visibility, reinstall, backup, failed-upgrade rollback and integrity check.'

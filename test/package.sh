@@ -21,7 +21,23 @@ unset EIN_APP_TOKEN EIN_BOT_TOKEN EIN_SNIFFER_BIN
 cd "$scratch"
 tar -xzf "$root/dist/$archive.tar.gz"
 diff -r "$root/.agents/skills/codemode" "$archive/.agents/skills/codemode"
-sh "$archive/install.sh"
+mkdir feature-cli
+cat > feature-cli/codex <<'CLI'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/codex-calls"
+test "$*" = 'features list' || exit 1
+printf '%s\n' 'code_mode_only  under development  false' "$FEATURE_ROW"
+CLI
+chmod +x feature-cli/codex
+install_with_features() {
+  FEATURE_ROW="$1" PATH="$scratch/feature-cli:$PATH" sh "$archive/install.sh" > install-output
+}
+hint='codex features enable code_mode'
+install_with_features 'code_mode  under development  false'
+grep -Fq "$hint" install-output
+skill="$HOME/.agents/skills/codemode"
+test "$(readlink "$skill")" = "$EIN_HOME/skills/codemode"
+diff -r "$archive/.agents/skills/codemode" "$skill/"
 test -f "$EIN_HOME/memory/store/.ein-store.json"
 test -f "$EIN_HOME/adapters/claude-mod/.claude-plugin/plugin.json"
 test -f "$EIN_HOME/adapters/antigravity/sniffer-memory-agent.md"
@@ -52,7 +68,11 @@ ruby -rjson -e 'result = JSON.parse(File.read(ARGV.fetch(0))); abort unless resu
 if (cd folder-1 && EIN_SNIFFER_EXPECT_PROJECT=folder-1 EIN_SNIFFER_DELEGATION=assigned \
     sniffer delegate --project folder-2 --cwd ../folder-2 -- touch "$scratch/unexpected-child"); then exit 1; fi
 test ! -e "$scratch/unexpected-child"
-sh "$archive/install.sh"
+install_with_features 'code_mode  under development  true'
+if grep -Fq "$hint" install-output; then exit 1; fi
+install_with_features ''
+if grep -Fq "$hint" install-output; then exit 1; fi
+test "$(cat "$HOME/codex-calls")" = "$(printf '%s\n' 'features list' 'features list' 'features list')"
 test ! -e "$EIN_HOME/backups"
 codex_hooks="$CODEX_HOME/hooks.json"
 agy_hooks="$HOME/.gemini/config/hooks.json"
@@ -85,11 +105,14 @@ sh "$archive/install.sh" --with-hooks
 shasum -a 256 -c installed-hooks.sha256
 conflict_user="$scratch/conflicting-user"
 conflict_codex="$scratch/conflicting-codex"
-mkdir -p "$conflict_user/.gemini/config" "$conflict_codex"
+mkdir -p "$conflict_user/.gemini/config" "$conflict_codex" "$conflict_user/.agents/skills/codemode"
+printf '%s\n' 'my own skill' > "$conflict_user/.agents/skills/codemode/SKILL.md"
 printf '%s\n' '{"description":"local","hooks":{}}' > "$conflict_codex/hooks.json"
 cp "$conflict_codex/hooks.json" codex-before.json
 printf '%s\n' '{"sniffer-memory":{"custom":true}}' > "$conflict_user/.gemini/config/hooks.json"
 if HOME="$conflict_user" CODEX_HOME="$conflict_codex" sh "$archive/install.sh" --with-hooks; then exit 1; fi
+test "$(cat "$conflict_user/.agents/skills/codemode/SKILL.md")" = 'my own skill'
+test ! -e "$conflict_user/.agents/skills/codemode/codemode"
 cmp "$conflict_codex/hooks.json" codex-before.json
 (cd folder-1 && ein memory search --query PORT) > same-project.json
 grep -q 'm-local-port' same-project.json

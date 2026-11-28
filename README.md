@@ -16,7 +16,7 @@
 
 **Sniffer**는 프로젝트별 장기 기억을 저장하고 검색합니다. Slack에서 내린 결정을 같은 프로젝트의 터미널 세션에서 찾아볼 수 있습니다. Slack 없이 시작하려면 작업 폴더를 등록하고 첫 기억을 저장해 보세요. [Sniffer에서 첫 기억 저장·검색하기](sniffer/README.md#slack-없이-프로젝트-기억-사용하기)
 
-**Ein Code Mode**는 여러 조회를 묶고 결과를 집계하는 프로젝트 스킬입니다. Codex에서 이 저장소를 열고 “설정 파일마다 타임아웃 값을 찾아 비교해 줘”라고 요청하면 작업에 맞춰 선택할 수 있습니다. 직접 지정하려면 `$codemode`를 사용하세요. [Code Mode 스킬](.agents/skills/codemode/SKILL.md)
+**Ein Code Mode**는 여러 조회를 묶고 결과를 집계하는 스킬입니다. Mac 설치기가 `~/.agents/skills/codemode`에 등록하므로, 설치 후 어느 프로젝트에서든 새 Codex 세션을 열고 “설정 파일마다 타임아웃 값을 찾아 비교해 줘”라고 요청하면 작업에 맞춰 선택할 수 있습니다. 직접 지정하려면 `$codemode`를 사용하세요. Codex CLI에서 `code_mode` 기능이 꺼져 있으면 설치기가 `codex features enable code_mode`를 안내합니다. [Code Mode 스킬](.agents/skills/codemode/SKILL.md)
 
 ## 에이전트 실행 흐름
 

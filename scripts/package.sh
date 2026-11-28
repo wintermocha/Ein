@@ -38,6 +38,7 @@ cp sniffer/LICENSE sniffer/THIRD-PARTY-NOTICES.txt "$bundle/licenses/"
 find sniffer/vendor node_modules -type f \( -iname 'license' -o -iname 'license.*' -o -name NOTICE -o -name PATENTS \) \
   -exec sh -ec 'dest=$1; shift; for f do mkdir -p "$dest/$(dirname "$f")"; cp "$f" "$dest/$f"; done' sh "$bundle/licenses" {} +
 printf '%s\n' "$platform" > "$bundle/platform"
+printf '%s\n' "${EIN_RELEASE_TAG:-source}" > "$bundle/release-tag"
 (
   cd "$bundle"
   find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} + > SHA256SUMS
